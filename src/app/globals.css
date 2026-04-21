@@ -2,69 +2,156 @@
 @import "@xyflow/react/dist/style.css";
 
 :root {
-  --background: #0a0a0b;
-  --foreground: #ededf0;
-  --muted: #17171b;
-  --elevated: #1f1f24;
-  --border: #2a2a30;
-  --accent: #a78bfa;
-  --accent-strong: #8b5cf6;
-  --accent-glow: rgba(167, 139, 250, 0.45);
+  /* Warm editorial paper palette */
+  --paper: #faf9f6;
+  --paper-2: #f3f0e8;
+  --card: #ffffff;
+  --ink: #181715;
+  --ink-2: #5a5652;
+  --ink-3: #9b968d;
+  --line: #e7e3d8;
+  --line-2: #d4cfc2;
+  --accent: #c65a3a;
+  --accent-soft: #f1ddce;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-muted: var(--muted);
-  --color-elevated: var(--elevated);
-  --color-border: var(--border);
+  --color-paper: var(--paper);
+  --color-paper-2: var(--paper-2);
+  --color-card: var(--card);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-line: var(--line);
+  --color-line-2: var(--line-2);
   --color-accent: var(--accent);
-  --color-accent-strong: var(--accent-strong);
+  --color-accent-soft: var(--accent-soft);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --font-serif: var(--font-instrument-serif);
+}
+
+html,
+body {
+  background: var(--paper);
+  color: var(--ink);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-sans), system-ui, sans-serif;
+  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
-/* React Flow dark tuning */
+/* React Flow light theming */
 .react-flow {
   background: transparent;
 }
 .react-flow__background {
-  background-color: var(--background);
+  background-color: var(--paper);
 }
 .react-flow__attribution {
-  background: transparent !important;
-  color: color-mix(in oklab, var(--foreground) 40%, transparent);
-  font-size: 10px;
+  display: none !important;
 }
 .react-flow__controls {
-  background: var(--elevated);
-  border: 1px solid var(--border);
-  border-radius: 10px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 8px;
   overflow: hidden;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  box-shadow:
+    0 1px 2px rgba(24, 23, 21, 0.04),
+    0 4px 12px rgba(24, 23, 21, 0.04);
 }
 .react-flow__controls-button {
   background: transparent;
-  border-bottom: 1px solid var(--border);
-  color: var(--foreground);
-  transition: background 120ms ease, color 120ms ease;
+  border-bottom: 1px solid var(--line);
+  color: var(--ink-2);
+  transition:
+    background 120ms ease,
+    color 120ms ease;
 }
 .react-flow__controls-button:hover {
-  background: color-mix(in oklab, var(--accent) 14%, transparent);
-  color: var(--accent);
+  background: var(--paper-2);
+  color: var(--ink);
 }
 .react-flow__controls-button svg {
   fill: currentColor;
 }
 .react-flow__minimap {
-  background: var(--elevated);
-  border: 1px solid var(--border);
-  border-radius: 10px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 8px;
   overflow: hidden;
+  box-shadow:
+    0 1px 2px rgba(24, 23, 21, 0.04),
+    0 4px 12px rgba(24, 23, 21, 0.04);
+}
+
+/* Handles — monochrome, precise */
+.react-flow__handle {
+  width: 9px !important;
+  height: 9px !important;
+  background: var(--ink) !important;
+  border: 1.5px solid var(--card) !important;
+  opacity: 0.85;
+  transition:
+    opacity 120ms ease,
+    background 120ms ease,
+    transform 120ms ease;
+}
+.react-flow__handle:hover {
+  opacity: 1;
+  transform: scale(1.15);
+}
+.react-flow__handle.connecting,
+.react-flow__handle.connectionindicator:hover {
+  background: var(--accent) !important;
+}
+.react-flow__edge-path {
+  stroke: var(--ink) !important;
+  stroke-width: 1.25 !important;
+  stroke-opacity: 0.45;
+}
+.react-flow__edge.selected .react-flow__edge-path,
+.react-flow__edge:hover .react-flow__edge-path {
+  stroke: var(--accent) !important;
+  stroke-opacity: 1;
+  stroke-width: 1.5 !important;
+}
+
+/* Fine selection marquee */
+.react-flow__selection {
+  background: var(--accent-soft) !important;
+  border: 1px solid var(--accent) !important;
+}
+
+/* Scrollbar taste */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--line-2);
+  border-radius: 10px;
+  border: 2px solid var(--paper);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--ink-3);
+}
+
+/* Serif display helper class */
+.serif {
+  font-family: var(--font-serif), "Instrument Serif", Georgia, serif;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+}
+.serif-italic {
+  font-family: var(--font-serif), "Instrument Serif", Georgia, serif;
+  font-style: italic;
+  font-weight: 400;
+  letter-spacing: -0.01em;
 }

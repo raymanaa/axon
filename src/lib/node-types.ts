@@ -49,34 +49,43 @@ export type AxonNodeData =
 
 export type AxonNode = Node<AxonNodeData, NodeKind>;
 
+/**
+ * Restrained editorial palette — each kind gets one precise accent
+ * shown as a 4px square in the node header, nothing more.
+ */
 export const NODE_META: Record<
   NodeKind,
-  { title: string; accent: string; description: string }
+  { title: string; accent: string; description: string; hint: string }
 > = {
   trigger: {
     title: "Trigger",
-    accent: "#34d399",
+    accent: "#3d8b5a",
     description: "Start a run",
+    hint: "Where a workflow begins.",
   },
   llm: {
-    title: "LLM",
-    accent: "#a78bfa",
-    description: "Call a language model",
+    title: "Language model",
+    accent: "#181715",
+    description: "Prompt Gemini",
+    hint: "Sends a prompt; streams back tokens.",
   },
   tool: {
     title: "Tool",
-    accent: "#60a5fa",
-    description: "Call an HTTP API or fetch a page",
+    accent: "#3b5884",
+    description: "HTTP · fetch",
+    hint: "Calls an external API.",
   },
   route: {
     title: "Route",
-    accent: "#f59e0b",
-    description: "Branch on an LLM classification",
+    accent: "#b45309",
+    description: "Classify & branch",
+    hint: "Picks a branch based on input.",
   },
   reply: {
     title: "Reply",
-    accent: "#f472b6",
-    description: "Render a final response",
+    accent: "#8a3a20",
+    description: "Final response",
+    hint: "Renders the workflow's output.",
   },
 };
 
@@ -87,14 +96,14 @@ export function makeNodeData(kind: NodeKind): AxonNodeData {
     case "llm":
       return {
         kind,
-        label: "LLM",
+        label: "Summarize",
         model: "gemini-2.5-flash",
         prompt: "Summarize the input in one sentence.",
       };
     case "tool":
       return {
         kind,
-        label: "HTTP",
+        label: "Fetch",
         method: "GET",
         url: "https://hacker-news.firebaseio.com/v0/topstories.json",
       };
@@ -102,7 +111,7 @@ export function makeNodeData(kind: NodeKind): AxonNodeData {
       return {
         kind,
         label: "Classify",
-        classifier: "Is the input asking a question or giving a command?",
+        classifier: "Is the input a question or a command?",
         classes: ["question", "command"],
       };
     case "reply":

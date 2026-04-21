@@ -1,7 +1,6 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { MousePointerClick, X } from "lucide-react";
 import type { ChangeEvent } from "react";
 import type { AxonNode, AxonNodeData, NodeKind } from "@/lib/node-types";
 import { NODE_META } from "@/lib/node-types";
@@ -13,19 +12,19 @@ type Props = {
 
 export function ConfigPanel({ node, onUpdate }: Props) {
   return (
-    <aside className="flex h-full w-[320px] shrink-0 flex-col border-l border-border bg-muted/40">
+    <aside className="flex h-full w-[340px] shrink-0 flex-col border-l border-line bg-paper">
       <AnimatePresence mode="wait">
         {node ? (
           <motion.div
             key={node.id}
-            initial={{ opacity: 0, x: 12 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: 12 }}
-            transition={{ duration: 0.18 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.16 }}
             className="flex h-full flex-col"
           >
             <Header kind={(node.type ?? "trigger") as NodeKind} id={node.id} />
-            <div className="flex-1 overflow-y-auto px-4 py-3">
+            <div className="flex-1 overflow-y-auto px-5 py-4">
               <Form
                 id={node.id}
                 data={node.data as AxonNodeData}
@@ -41,14 +40,12 @@ export function ConfigPanel({ node, onUpdate }: Props) {
             exit={{ opacity: 0 }}
             className="flex flex-1 flex-col items-center justify-center gap-3 px-8 text-center"
           >
-            <MousePointerClick
-              className="h-6 w-6 text-foreground/30"
-              strokeWidth={1.5}
-            />
-            <p className="text-xs text-foreground/45 leading-relaxed">
+            <div className="h-[1px] w-8 bg-line" />
+            <p className="text-[12px] text-ink-2 leading-relaxed max-w-[220px]">
               Select a node to configure it.
-              <br />
-              Drag nodes from the left panel to add them to the canvas.
+            </p>
+            <p className="text-[11px] text-ink-3 leading-relaxed max-w-[220px]">
+              Click a card on the canvas, or drop a new one from the left.
             </p>
           </motion.div>
         )}
@@ -60,28 +57,25 @@ export function ConfigPanel({ node, onUpdate }: Props) {
 function Header({ kind, id }: { kind: NodeKind; id: string }) {
   const meta = NODE_META[kind];
   return (
-    <div className="flex items-center justify-between gap-2 border-b border-border/80 px-4 py-3">
-      <div className="flex items-center gap-2.5">
-        <span
-          aria-hidden
-          className="inline-block h-2 w-2 rounded-full"
-          style={{
-            background: meta.accent,
-            boxShadow: `0 0 10px ${meta.accent}aa`,
-          }}
-        />
-        <div className="min-w-0">
-          <div
-            className="text-[10px] font-mono uppercase tracking-[0.2em]"
-            style={{ color: meta.accent }}
-          >
+    <div className="border-b border-line px-5 py-4">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2 min-w-0">
+          <span
+            aria-hidden
+            className="block h-[9px] w-[9px] rounded-sm shrink-0"
+            style={{ background: meta.accent }}
+          />
+          <span className="text-[10.5px] font-mono uppercase tracking-[0.18em] text-ink-2">
             {meta.title}
-          </div>
-          <div className="text-[10px] font-mono text-foreground/40 truncate">
-            {id}
-          </div>
+          </span>
         </div>
+        <span className="font-mono text-[10.5px] text-ink-3 truncate">
+          {id}
+        </span>
       </div>
+      <p className="mt-2.5 text-[12.5px] text-ink-2 leading-relaxed">
+        {meta.hint}
+      </p>
     </div>
   );
 }
@@ -127,17 +121,19 @@ function Form({
               value={data.model}
               onChange={(e) =>
                 onUpdate(id, {
-                  model: e.target.value as "gemini-2.5-flash" | "gemini-2.5-pro",
+                  model: e.target.value as
+                    | "gemini-2.5-flash"
+                    | "gemini-2.5-pro",
                 })
               }
             >
-              <option value="gemini-2.5-flash">gemini-2.5-flash</option>
-              <option value="gemini-2.5-pro">gemini-2.5-pro</option>
+              <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+              <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
             </Select>
           </Field>
           <Field
             label="Prompt"
-            hint="Use {{input}} to reference previous node's output."
+            hint="Use {{input}} to reference the previous node's output."
           >
             <Textarea
               rows={8}
@@ -186,8 +182,8 @@ function Form({
             />
           </Field>
           <Field
-            label="Classifier prompt"
-            hint="LLM instruction for picking a branch."
+            label="Classifier"
+            hint="Instruction for the LLM that picks a branch."
           >
             <Textarea
               rows={4}
@@ -195,7 +191,10 @@ function Form({
               onChange={(e) => onUpdate(id, { classifier: e.target.value })}
             />
           </Field>
-          <Field label="Branches" hint="One class per line. Each becomes a handle.">
+          <Field
+            label="Branches"
+            hint="One class per line. Each becomes an output handle."
+          >
             <Textarea
               rows={4}
               value={data.classes.join("\n")}
@@ -245,13 +244,13 @@ function Field({
   children: React.ReactNode;
 }) {
   return (
-    <label className="mb-4 block">
-      <div className="mb-1.5 text-[10px] uppercase tracking-[0.18em] font-mono text-foreground/50">
+    <label className="mb-5 block">
+      <div className="mb-1.5 text-[10.5px] uppercase tracking-[0.16em] font-mono text-ink-3">
         {label}
       </div>
       {children}
       {hint && (
-        <div className="mt-1.5 text-[11px] text-foreground/40 leading-relaxed">
+        <div className="mt-1.5 text-[11px] text-ink-3 leading-relaxed">
           {hint}
         </div>
       )}
@@ -260,7 +259,7 @@ function Field({
 }
 
 const inputBase =
-  "w-full rounded-md border border-border bg-background/60 px-2.5 py-1.5 text-sm text-foreground placeholder:text-foreground/30 outline-none transition-colors focus:border-accent focus:bg-background focus:ring-2 focus:ring-accent/25";
+  "w-full rounded-md border border-line bg-card px-2.5 py-1.5 text-[13px] text-ink placeholder:text-ink-3 outline-none transition-[border-color,box-shadow] focus:border-[color:var(--accent)] focus:shadow-[0_0_0_3px_var(--accent-soft)]";
 
 function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
   return <input type="text" {...props} className={inputBase} />;

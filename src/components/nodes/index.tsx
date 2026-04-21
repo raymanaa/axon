@@ -1,7 +1,6 @@
 "use client";
 
 import { Handle, Position, type NodeProps } from "@xyflow/react";
-import { Brain, Globe, Play, Send, Split } from "lucide-react";
 import type {
   AxonNode,
   LLMData,
@@ -10,39 +9,64 @@ import type {
   ToolData,
   TriggerData,
 } from "@/lib/node-types";
-import { NODE_META } from "@/lib/node-types";
 import { NodeShell } from "./node-shell";
 
 type TypedNodeProps<D extends AxonNode["data"]> = NodeProps<
   AxonNode & { data: D }
 >;
 
+function Label({ children }: { children: React.ReactNode }) {
+  return <div className="text-[13px] font-medium text-ink">{children}</div>;
+}
+
+function Sub({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="mt-0.5 text-[11.5px] text-ink-2 leading-relaxed">
+      {children}
+    </div>
+  );
+}
+
+function Chip({
+  children,
+  tone = "ink",
+}: {
+  children: React.ReactNode;
+  tone?: "ink" | "accent";
+}) {
+  return (
+    <span
+      className={[
+        "inline-flex items-center rounded-[4px] px-1.5 py-[2px]",
+        "font-mono text-[10px] tracking-[0.02em]",
+        tone === "accent"
+          ? "bg-accent-soft text-[color:var(--accent)]"
+          : "bg-paper-2 text-ink-2 border border-line",
+      ].join(" ")}
+    >
+      {children}
+    </span>
+  );
+}
+
 export function TriggerNode({ data, selected }: TypedNodeProps<TriggerData>) {
   return (
-    <NodeShell
-      kind="trigger"
-      icon={Play}
-      title="Trigger"
-      selected={selected}
-      hasInput={false}
-    >
-      <div className="text-sm font-medium">{data.label}</div>
-      <div className="mt-0.5 text-xs text-foreground/55">{data.subtitle}</div>
+    <NodeShell kind="trigger" selected={selected} hasInput={false}>
+      <Label>{data.label}</Label>
+      <Sub>{data.subtitle}</Sub>
     </NodeShell>
   );
 }
 
 export function LLMNode({ data, selected }: TypedNodeProps<LLMData>) {
   return (
-    <NodeShell kind="llm" icon={Brain} title="LLM" selected={selected}>
-      <div className="text-sm font-medium">{data.label}</div>
-      <div className="mt-1 flex items-center gap-1.5">
-        <span className="inline-flex items-center rounded-md bg-background/60 px-1.5 py-0.5 text-[10px] font-mono text-foreground/70 border border-border">
-          {data.model.replace("gemini-", "")}
-        </span>
+    <NodeShell kind="llm" selected={selected}>
+      <Label>{data.label}</Label>
+      <div className="mt-1.5">
+        <Chip>{data.model.replace("gemini-", "")}</Chip>
       </div>
-      <div className="mt-2 text-xs text-foreground/55 line-clamp-3 leading-relaxed">
-        {data.prompt || <span className="italic">no prompt</span>}
+      <div className="mt-2 text-[11.5px] text-ink-2 leading-relaxed line-clamp-2 font-mono">
+        {data.prompt || <span className="italic text-ink-3">No prompt</span>}
       </div>
     </NodeShell>
   );
@@ -50,19 +74,11 @@ export function LLMNode({ data, selected }: TypedNodeProps<LLMData>) {
 
 export function ToolNode({ data, selected }: TypedNodeProps<ToolData>) {
   return (
-    <NodeShell kind="tool" icon={Globe} title="Tool" selected={selected}>
-      <div className="text-sm font-medium">{data.label}</div>
+    <NodeShell kind="tool" selected={selected}>
+      <Label>{data.label}</Label>
       <div className="mt-1.5 flex items-center gap-1.5">
-        <span
-          className="inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-mono"
-          style={{
-            background: "rgba(96, 165, 250, 0.12)",
-            color: "#60a5fa",
-          }}
-        >
-          {data.method}
-        </span>
-        <span className="font-mono text-[11px] text-foreground/55 truncate">
+        <Chip>{data.method}</Chip>
+        <span className="font-mono text-[11px] text-ink-2 truncate min-w-0">
           {data.url.replace(/^https?:\/\//, "")}
         </span>
       </div>
@@ -71,13 +87,10 @@ export function ToolNode({ data, selected }: TypedNodeProps<ToolData>) {
 }
 
 export function RouteNode({ data, selected }: TypedNodeProps<RouteData>) {
-  const accent = NODE_META.route.accent;
   const count = Math.max(data.classes.length, 1);
   return (
     <NodeShell
       kind="route"
-      icon={Split}
-      title="Route"
       selected={selected}
       hasOutput={false}
       extraHandles={
@@ -90,29 +103,21 @@ export function RouteNode({ data, selected }: TypedNodeProps<RouteData>) {
                 id={cls}
                 type="source"
                 position={Position.Right}
-                className="!h-3 !w-3 !border-2 !border-background"
-                style={{ top: `${top}%`, background: accent }}
+                style={{ top: `${top}%` }}
+                className="!-mr-[1px]"
               />
             );
           })}
         </>
       }
     >
-      <div className="text-sm font-medium">{data.label}</div>
+      <Label>{data.label}</Label>
       <div className="mt-1.5 flex flex-wrap gap-1">
-        {data.classes.map((cls) => (
-          <span
-            key={cls}
-            className="inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-mono border"
-            style={{
-              borderColor: `${accent}55`,
-              color: accent,
-              background: `${accent}15`,
-            }}
-          >
-            {cls}
-          </span>
-        ))}
+        {data.classes.length === 0 ? (
+          <span className="text-[11px] text-ink-3 italic">No branches yet</span>
+        ) : (
+          data.classes.map((cls) => <Chip key={cls}>{cls}</Chip>)
+        )}
       </div>
     </NodeShell>
   );
@@ -120,15 +125,9 @@ export function RouteNode({ data, selected }: TypedNodeProps<RouteData>) {
 
 export function ReplyNode({ data, selected }: TypedNodeProps<ReplyData>) {
   return (
-    <NodeShell
-      kind="reply"
-      icon={Send}
-      title="Reply"
-      selected={selected}
-      hasOutput={false}
-    >
-      <div className="text-sm font-medium">{data.label}</div>
-      <div className="mt-1.5 font-mono text-[11px] text-foreground/55 line-clamp-2 leading-relaxed">
+    <NodeShell kind="reply" selected={selected} hasOutput={false}>
+      <Label>{data.label}</Label>
+      <div className="mt-1.5 font-mono text-[11px] text-ink-2 leading-relaxed line-clamp-2">
         {data.template}
       </div>
     </NodeShell>

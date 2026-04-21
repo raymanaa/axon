@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Instrument_Serif } from "next/font/google";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -12,10 +12,17 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const instrumentSerif = Instrument_Serif({
+  variable: "--font-instrument-serif",
+  weight: "400",
+  style: ["normal", "italic"],
+  subsets: ["latin"],
+});
+
 export const metadata: Metadata = {
   title: "Axon — Agent Workflow Builder",
   description:
-    "Visual, node-based canvas for composing multi-step AI agents. Drop nodes, wire them up, watch tokens stream.",
+    "Compose multi-step AI agents on a canvas. Wire triggers, language models, tools, and routes.",
 };
 
 export default function RootLayout({
@@ -24,9 +31,9 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased dark`}
+      className={`${geistSans.variable} ${geistMono.variable} ${instrumentSerif.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col bg-background text-foreground">
+      <body className="min-h-full flex flex-col bg-paper text-ink">
         {children}
       </body>
     </html>
