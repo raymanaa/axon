@@ -4,96 +4,165 @@ import {
   Background,
   BackgroundVariant,
   Controls,
-  Handle,
   MiniMap,
-  Position,
   ReactFlow,
-  type Node,
-  type NodeProps,
+  ReactFlowProvider,
+  addEdge,
+  useEdgesState,
+  useNodesState,
+  useReactFlow,
+  type Connection,
+  type Edge,
+  type OnSelectionChangeParams,
 } from "@xyflow/react";
-import { motion } from "framer-motion";
-import { useMemo } from "react";
+import { useCallback, useState, type DragEvent } from "react";
+import { ConfigPanel } from "@/components/config-panel";
+import { nodeTypes } from "@/components/nodes";
+import { Palette, PALETTE_MIME } from "@/components/palette";
+import {
+  makeNodeData,
+  NODE_META,
+  type AxonNode,
+  type AxonNodeData,
+  type NodeKind,
+} from "@/lib/node-types";
 
-type TriggerData = { label: string; subtitle: string };
+const INITIAL_NODES: AxonNode[] = [
+  {
+    id: "n1",
+    type: "trigger",
+    position: { x: 80, y: 200 },
+    data: makeNodeData("trigger"),
+  },
+  {
+    id: "n2",
+    type: "llm",
+    position: { x: 400, y: 180 },
+    data: makeNodeData("llm"),
+  },
+  {
+    id: "n3",
+    type: "reply",
+    position: { x: 740, y: 200 },
+    data: makeNodeData("reply"),
+  },
+];
 
-function TriggerNode({ data, selected }: NodeProps<Node<TriggerData>>) {
+const INITIAL_EDGES: Edge[] = [
+  { id: "e1-2", source: "n1", target: "n2", animated: true },
+  { id: "e2-3", source: "n2", target: "n3", animated: true },
+];
+
+function Workspace() {
+  const { screenToFlowPosition } = useReactFlow<AxonNode>();
+  const [nodes, setNodes, onNodesChange] =
+    useNodesState<AxonNode>(INITIAL_NODES);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(INITIAL_EDGES);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  const onConnect = useCallback(
+    (conn: Connection) => setEdges((eds) => addEdge(conn, eds)),
+    [setEdges],
+  );
+
+  const onDragOver = useCallback((event: DragEvent) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+  }, []);
+
+  const onDrop = useCallback(
+    (event: DragEvent) => {
+      event.preventDefault();
+      const kind = event.dataTransfer.getData(PALETTE_MIME) as NodeKind;
+      if (!kind) return;
+      const position = screenToFlowPosition({
+        x: event.clientX,
+        y: event.clientY,
+      });
+      const id = `n${crypto.randomUUID().slice(0, 8)}`;
+      const newNode: AxonNode = {
+        id,
+        type: kind,
+        position,
+        data: makeNodeData(kind),
+      };
+      setNodes((nds) => nds.concat(newNode));
+    },
+    [screenToFlowPosition, setNodes],
+  );
+
+  const onSelectionChange = useCallback((params: OnSelectionChangeParams) => {
+    const first = params.nodes?.[0];
+    setSelectedId(first ? first.id : null);
+  }, []);
+
+  const updateNodeData = useCallback(
+    (id: string, patch: Partial<AxonNodeData>) => {
+      setNodes((nds) =>
+        nds.map((n) =>
+          n.id === id
+            ? ({ ...n, data: { ...n.data, ...patch } } as AxonNode)
+            : n,
+        ),
+      );
+    },
+    [setNodes],
+  );
+
+  const selected = nodes.find((n) => n.id === selectedId) ?? null;
+
   return (
-    <motion.div
-      initial={{ scale: 0.92, opacity: 0 }}
-      animate={{ scale: 1, opacity: 1 }}
-      transition={{ type: "spring", stiffness: 260, damping: 22 }}
-      className={[
-        "relative w-[220px] rounded-xl border backdrop-blur-sm",
-        "bg-elevated/90 px-4 py-3",
-        "shadow-[0_10px_30px_rgba(0,0,0,0.5)]",
-        selected
-          ? "border-accent ring-2 ring-accent/40"
-          : "border-border hover:border-accent/50",
-        "transition-colors",
-      ].join(" ")}
-    >
-      <div className="flex items-center gap-2">
-        <span
-          aria-hidden
-          className="relative inline-block h-2 w-2 rounded-full bg-accent"
+    <div className="flex h-full w-full">
+      <Palette />
+      <main className="relative flex-1">
+        <ReactFlow<AxonNode>
+          nodes={nodes}
+          edges={edges}
+          nodeTypes={nodeTypes}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          onConnect={onConnect}
+          onSelectionChange={onSelectionChange}
+          onDrop={onDrop}
+          onDragOver={onDragOver}
+          fitView
+          fitViewOptions={{ padding: 0.25, maxZoom: 1.1 }}
+          defaultEdgeOptions={{
+            animated: true,
+            style: {
+              stroke: "color-mix(in oklab, var(--foreground) 35%, transparent)",
+              strokeWidth: 1.5,
+            },
+          }}
+          proOptions={{ hideAttribution: false }}
         >
-          <span className="absolute inset-0 rounded-full bg-accent blur-[6px] opacity-70" />
-        </span>
-        <span className="text-[10px] uppercase tracking-[0.18em] text-accent font-mono">
-          trigger
-        </span>
-      </div>
-      <div className="mt-2 text-sm font-medium text-foreground">
-        {data.label}
-      </div>
-      <div className="mt-0.5 text-xs text-foreground/60">{data.subtitle}</div>
-      <Handle
-        type="source"
-        position={Position.Right}
-        className="!h-3 !w-3 !border-2 !border-background !bg-accent"
-      />
-    </motion.div>
+          <Background
+            variant={BackgroundVariant.Dots}
+            gap={22}
+            size={1.2}
+            color="color-mix(in oklab, var(--foreground) 22%, transparent)"
+          />
+          <Controls showInteractive={false} />
+          <MiniMap
+            pannable
+            zoomable
+            nodeColor={(n) =>
+              NODE_META[(n.type ?? "trigger") as NodeKind].accent
+            }
+            nodeStrokeWidth={0}
+            maskColor="rgba(10,10,11,0.75)"
+          />
+        </ReactFlow>
+      </main>
+      <ConfigPanel node={selected} onUpdate={updateNodeData} />
+    </div>
   );
 }
 
 export function Canvas() {
-  const nodeTypes = useMemo(() => ({ trigger: TriggerNode }), []);
-
-  const initialNodes: Node<TriggerData>[] = useMemo(
-    () => [
-      {
-        id: "1",
-        type: "trigger",
-        position: { x: 160, y: 180 },
-        data: { label: "Start", subtitle: "Manual run" },
-      },
-    ],
-    [],
-  );
-
   return (
-    <ReactFlow
-      nodes={initialNodes}
-      nodeTypes={nodeTypes}
-      fitView
-      fitViewOptions={{ padding: 0.3, maxZoom: 1.1 }}
-      defaultEdgeOptions={{ animated: true }}
-      proOptions={{ hideAttribution: false }}
-    >
-      <Background
-        variant={BackgroundVariant.Dots}
-        gap={22}
-        size={1.2}
-        color="color-mix(in oklab, var(--foreground) 22%, transparent)"
-      />
-      <Controls showInteractive={false} />
-      <MiniMap
-        pannable
-        zoomable
-        nodeColor={() => "var(--accent)"}
-        nodeStrokeWidth={0}
-        maskColor="rgba(10,10,11,0.75)"
-      />
-    </ReactFlow>
+    <ReactFlowProvider>
+      <Workspace />
+    </ReactFlowProvider>
   );
 }
