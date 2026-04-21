@@ -4,18 +4,22 @@
 :root {
   --background: #0a0a0b;
   --foreground: #ededf0;
-  --muted: #1a1a1d;
-  --border: #262629;
-  --accent: #8b5cf6;
-  --accent-glow: rgba(139, 92, 246, 0.35);
+  --muted: #17171b;
+  --elevated: #1f1f24;
+  --border: #2a2a30;
+  --accent: #a78bfa;
+  --accent-strong: #8b5cf6;
+  --accent-glow: rgba(167, 139, 250, 0.45);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-muted: var(--muted);
+  --color-elevated: var(--elevated);
   --color-border: var(--border);
   --color-accent: var(--accent);
+  --color-accent-strong: var(--accent-strong);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
@@ -39,27 +43,27 @@ body {
   font-size: 10px;
 }
 .react-flow__controls {
-  background: var(--muted);
+  background: var(--elevated);
   border: 1px solid var(--border);
   border-radius: 10px;
   overflow: hidden;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
 }
 .react-flow__controls-button {
   background: transparent;
   border-bottom: 1px solid var(--border);
   color: var(--foreground);
-  transition: background 120ms ease;
+  transition: background 120ms ease, color 120ms ease;
 }
 .react-flow__controls-button:hover {
-  background: color-mix(in oklab, var(--accent) 12%, transparent);
+  background: color-mix(in oklab, var(--accent) 14%, transparent);
   color: var(--accent);
 }
 .react-flow__controls-button svg {
   fill: currentColor;
 }
 .react-flow__minimap {
-  background: var(--muted);
+  background: var(--elevated);
   border: 1px solid var(--border);
   border-radius: 10px;
   overflow: hidden;

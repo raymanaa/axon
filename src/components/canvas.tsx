@@ -19,36 +19,38 @@ type TriggerData = { label: string; subtitle: string };
 function TriggerNode({ data, selected }: NodeProps<Node<TriggerData>>) {
   return (
     <motion.div
-      initial={{ scale: 0.8, opacity: 0 }}
+      initial={{ scale: 0.92, opacity: 0 }}
       animate={{ scale: 1, opacity: 1 }}
       transition={{ type: "spring", stiffness: 260, damping: 22 }}
       className={[
-        "relative w-[220px] rounded-xl border bg-[--muted]/90 backdrop-blur-sm",
-        "px-4 py-3 shadow-[0_8px_30px_rgba(0,0,0,0.45)]",
+        "relative w-[220px] rounded-xl border backdrop-blur-sm",
+        "bg-elevated/90 px-4 py-3",
+        "shadow-[0_10px_30px_rgba(0,0,0,0.5)]",
         selected
-          ? "border-[--accent] ring-2 ring-[--accent-glow]"
-          : "border-[--border]",
+          ? "border-accent ring-2 ring-accent/40"
+          : "border-border hover:border-accent/50",
+        "transition-colors",
       ].join(" ")}
     >
       <div className="flex items-center gap-2">
         <span
           aria-hidden
-          className="inline-block h-2 w-2 rounded-full bg-[--accent] shadow-[0_0_12px_var(--accent-glow)]"
-        />
-        <span className="text-[10px] uppercase tracking-[0.18em] text-[--accent] font-mono">
+          className="relative inline-block h-2 w-2 rounded-full bg-accent"
+        >
+          <span className="absolute inset-0 rounded-full bg-accent blur-[6px] opacity-70" />
+        </span>
+        <span className="text-[10px] uppercase tracking-[0.18em] text-accent font-mono">
           trigger
         </span>
       </div>
-      <div className="mt-2 text-sm font-medium text-[--foreground]">
+      <div className="mt-2 text-sm font-medium text-foreground">
         {data.label}
       </div>
-      <div className="mt-0.5 text-xs text-[--foreground]/60">
-        {data.subtitle}
-      </div>
+      <div className="mt-0.5 text-xs text-foreground/60">{data.subtitle}</div>
       <Handle
         type="source"
         position={Position.Right}
-        className="!h-3 !w-3 !border-2 !border-[--background] !bg-[--accent]"
+        className="!h-3 !w-3 !border-2 !border-background !bg-accent"
       />
     </motion.div>
   );
@@ -62,7 +64,7 @@ export function Canvas() {
       {
         id: "1",
         type: "trigger",
-        position: { x: 120, y: 160 },
+        position: { x: 160, y: 180 },
         data: { label: "Start", subtitle: "Manual run" },
       },
     ],
@@ -74,22 +76,23 @@ export function Canvas() {
       nodes={initialNodes}
       nodeTypes={nodeTypes}
       fitView
-      fitViewOptions={{ padding: 0.35 }}
-      proOptions={{ hideAttribution: false }}
+      fitViewOptions={{ padding: 0.3, maxZoom: 1.1 }}
       defaultEdgeOptions={{ animated: true }}
+      proOptions={{ hideAttribution: false }}
     >
       <Background
         variant={BackgroundVariant.Dots}
-        gap={20}
-        size={1}
-        color="color-mix(in oklab, var(--foreground) 18%, transparent)"
+        gap={22}
+        size={1.2}
+        color="color-mix(in oklab, var(--foreground) 22%, transparent)"
       />
       <Controls showInteractive={false} />
       <MiniMap
         pannable
         zoomable
         nodeColor={() => "var(--accent)"}
-        maskColor="rgba(10,10,11,0.7)"
+        nodeStrokeWidth={0}
+        maskColor="rgba(10,10,11,0.75)"
       />
     </ReactFlow>
   );
