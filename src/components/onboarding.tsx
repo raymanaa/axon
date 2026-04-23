@@ -3,15 +3,14 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowRight, CheckCircle2, Sparkles } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import type { RoleTab } from "@/components/role-tabs";
 
-const STORAGE_KEY = "axon.onboarding.dismissed.v3";
+const STORAGE_KEY = "axon.onboarding.dismissed.v4";
 
 export type OnboardingObs = {
-  selectedId: string | null;
-  scorePromptEdited: boolean;
-  userAddedCount: number;
-  userAddedLLM: boolean;
-  userEdgesOnNew: boolean;
+  selectedCandidateId: string | null;
+  activeTab: RoleTab;
+  activeRoleId: string;
 };
 
 type Placement = "above" | "below" | "left" | "right" | "center";
@@ -27,6 +26,8 @@ type Step = {
   callout?: string;
   cta?: string;
   isDone?: (obs: OnboardingObs) => boolean;
+  /** Side effect the onboarding can trigger (e.g., switch tab automatically) */
+  onEnter?: (setTab: (t: RoleTab) => void) => void;
 };
 
 const STEPS: Step[] = [
@@ -37,63 +38,59 @@ const STEPS: Step[] = [
     eyebrow: "Welcome",
     title: "Hiring you can",
     italicSpan: "explain.",
-    body: "Axon runs every candidate through a pipeline you can see — a rubric for each criterion, evidence for every score, a visible audit trail from application to decision. Four moves and you'll know how to drive it.",
+    body: "This is your candidate inbox for Senior Backend Engineer. Every candidate has been scored against the criteria you set, with evidence you can audit. In three clicks you'll see how it works.",
     callout: "Built for NYC Local Law 144 · EU AI Act Article 6",
-    cta: "Begin the tour",
+    cta: "Show me",
   },
   {
-    id: "click-score",
-    selector: '[data-id="n3"]',
+    id: "click-candidate",
+    selector: '[data-onboarding-target="candidate-row-first"]',
     placement: "below",
-    eyebrow: "Step 1 of 4",
-    title: "Click the",
-    italicSpan: "Score",
-    body: "This node scores each candidate on backend experience. Selecting it opens the rubric on the right. Every score node is a decision the auditor will inspect — they exist separately on purpose.",
-    isDone: (o) => o.selectedId === "n3",
+    eyebrow: "Step 1 of 3",
+    title: "Open a",
+    italicSpan: "candidate.",
+    body: "Click Maya Chen to see her scores, the evidence behind each score, and the pipeline's recommendation — all in one place.",
+    isDone: (o) => o.selectedCandidateId !== null,
   },
   {
-    id: "edit-prompt",
-    selector: '[data-onboarding-target="prompt-input"]',
+    id: "review-panel",
+    selector: '[data-onboarding-target="candidate-panel"]',
     placement: "left",
-    eyebrow: "Step 2 of 4",
-    title: "The rubric",
-    italicSpan: "is",
-    body: "The prompt. Tweak it — set stricter thresholds, require specific evidence, exclude demographic signals. Each edit becomes a new pipeline version, so past decisions stay linked to the rubric that produced them.",
-    isDone: (o) => o.scorePromptEdited,
+    eyebrow: "Step 2 of 3",
+    title: "Read the",
+    italicSpan: "evidence.",
+    body: "Every score has verbatim snippets from the résumé. If Maya is rejected tomorrow, this panel is your answer to 'why?' — and also to a regulator's audit request.",
+    cta: "Got it",
   },
   {
-    id: "add-node",
-    selector: '[data-onboarding-target="palette-llm"]',
-    placement: "right",
-    eyebrow: "Step 3 of 4",
-    title: "Add another",
-    italicSpan: "criterion.",
-    body: "Drag a Score node from the palette onto the canvas. You might score on communication, system-design depth, or a role-specific skill — whatever the hiring manager actually cares about.",
-    isDone: (o) => o.userAddedLLM,
-  },
-  {
-    id: "connect",
-    selector: null,
-    placement: "center",
-    eyebrow: "Step 4 of 4",
-    title: "Wire it into",
-    italicSpan: "the pipeline.",
-    body: "Drag from one of the small dots on the Parse résumé node to your new Score node, then from that to the Fit gate. Every edge is part of the audit record.",
-    isDone: (o) => o.userEdgesOnNew,
+    id: "open-criteria",
+    selector: '[data-onboarding-target="tab-criteria"]',
+    placement: "below",
+    eyebrow: "Step 3 of 3",
+    title: "Tune what you're",
+    italicSpan: "screening for.",
+    body: "Criteria are form cards, not prompts. Set strictness with a slider, describe what great looks like in plain English. Every change creates a new pipeline version so past decisions stay traceable.",
+    isDone: (o) => o.activeTab === "criteria",
   },
   {
     id: "done",
     selector: null,
     placement: "center",
     eyebrow: "You're set",
-    title: "Now you can",
-    italicSpan: "ship it.",
-    body: "Running this pipeline against real candidates arrives next — each run will stream live on the canvas and produce a signed audit record with rubric version, evidence, and reviewer. For now, explore.",
-    cta: "Start building",
+    title: "Explore",
+    italicSpan: "freely.",
+    body: "The Audit tab shows the underlying pipeline — most recruiters never open it; compliance teams live there. Running the pipeline on new candidates arrives in M4.",
+    cta: "Start reviewing",
   },
 ];
 
-export function Onboarding({ obs }: { obs: OnboardingObs }) {
+export function Onboarding({
+  obs,
+  onShowTab,
+}: {
+  obs: OnboardingObs;
+  onShowTab: (t: RoleTab) => void;
+}) {
   const [open, setOpen] = useState(false);
   const [idx, setIdx] = useState(0);
   const [completed, setCompleted] = useState(false);
@@ -101,14 +98,13 @@ export function Onboarding({ obs }: { obs: OnboardingObs }) {
 
   const step = STEPS[idx];
 
-  // Show on first visit
   useEffect(() => {
     if (typeof window === "undefined") return;
     const dismissed = window.localStorage.getItem(STORAGE_KEY) === "1";
     if (!dismissed) setOpen(true);
   }, []);
 
-  // Auto-advance when step's isDone observes truth
+  // Auto-advance when current step detects completion
   useEffect(() => {
     if (!open) return;
     const s = STEPS[idx];
@@ -119,7 +115,7 @@ export function Onboarding({ obs }: { obs: OnboardingObs }) {
       pendingAdvance.current = setTimeout(() => {
         setCompleted(false);
         advance();
-      }, 620);
+      }, 640);
     }
     return () => {
       if (pendingAdvance.current) clearTimeout(pendingAdvance.current);
@@ -127,7 +123,7 @@ export function Onboarding({ obs }: { obs: OnboardingObs }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, idx, obs]);
 
-  // Keyboard: Esc to dismiss entirely; → to force-advance on CTA steps only
+  // Esc / arrow
   useEffect(() => {
     if (!open) return;
     const handler = (e: KeyboardEvent) => {
@@ -140,8 +136,14 @@ export function Onboarding({ obs }: { obs: OnboardingObs }) {
   }, [open, idx]);
 
   function advance() {
-    if (idx < STEPS.length - 1) setIdx((i) => i + 1);
-    else dismiss();
+    const next = idx + 1;
+    if (next < STEPS.length) {
+      setIdx(next);
+      const nextStep = STEPS[next];
+      if (nextStep.onEnter) nextStep.onEnter(onShowTab);
+    } else {
+      dismiss();
+    }
   }
 
   function dismiss() {
@@ -217,7 +219,7 @@ function useTargetRect(selector: string | null) {
 
 function Spotlight({ selector }: { selector: string | null }) {
   const rect = useTargetRect(selector);
-  const pad = 10;
+  const pad = 8;
   const maskId = "axon-ob-spot";
 
   return (
@@ -238,7 +240,7 @@ function Spotlight({ selector }: { selector: string | null }) {
                 height: rect.height + pad * 2,
               }}
               transition={{ duration: 0.22, ease: [0.2, 0, 0.2, 1] }}
-              rx={12}
+              rx={10}
               fill="black"
             />
           )}
@@ -247,11 +249,11 @@ function Spotlight({ selector }: { selector: string | null }) {
       <motion.rect
         width="100%"
         height="100%"
-        fill="rgba(24, 23, 21, 0.36)"
+        fill="rgba(24, 23, 21, 0.24)"
         mask={`url(#${maskId})`}
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        transition={{ duration: 0.3 }}
+        transition={{ duration: 0.28 }}
       />
       {rect && (
         <motion.rect
@@ -263,17 +265,17 @@ function Spotlight({ selector }: { selector: string | null }) {
             height: rect.height + pad * 2,
           }}
           transition={{ duration: 0.22, ease: [0.2, 0, 0.2, 1] }}
-          rx={12}
+          rx={10}
           fill="none"
           stroke="var(--accent)"
-          strokeWidth={1.5}
-          strokeDasharray="6 5"
-          strokeOpacity={0.85}
+          strokeWidth={1.25}
+          strokeDasharray="5 4"
+          strokeOpacity={0.8}
         >
           <animate
             attributeName="stroke-dashoffset"
             from="0"
-            to="-22"
+            to="-18"
             dur="1.4s"
             repeatCount="indefinite"
           />
@@ -309,9 +311,9 @@ function Callout({
       initial={{ opacity: 0, y: 6, scale: 0.98 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: -4, scale: 0.98 }}
-      transition={{ duration: 0.24, ease: [0.2, 0, 0.2, 1] }}
+      transition={{ duration: 0.22, ease: [0.2, 0, 0.2, 1] }}
       style={style}
-      className="pointer-events-auto fixed w-[420px] max-w-[calc(100vw-32px)] rounded-xl border border-line bg-card shadow-[0_18px_48px_rgba(24,23,21,0.18)]"
+      className="pointer-events-auto fixed w-[400px] max-w-[calc(100vw-32px)] rounded-xl border border-line bg-card shadow-[0_18px_48px_rgba(24,23,21,0.14)]"
     >
       <div className="px-6 pt-5 pb-5">
         <div className="flex items-center gap-2">
@@ -324,7 +326,7 @@ function Callout({
           </span>
         </div>
 
-        <h2 className="serif mt-4 text-[28px] leading-[1.1] tracking-[-0.015em] text-ink">
+        <h2 className="serif mt-4 text-[26px] leading-[1.12] tracking-[-0.015em] text-ink">
           {step.title}
           {step.italicSpan && (
             <>
@@ -352,7 +354,7 @@ function Callout({
           {step.isDone ? (
             completed ? (
               <motion.span
-                initial={{ opacity: 0, scale: 0.9 }}
+                initial={{ opacity: 0, scale: 0.92 }}
                 animate={{ opacity: 1, scale: 1 }}
                 className="flex items-center gap-1.5 rounded-md bg-[color:var(--accent-soft)] px-2.5 py-1.5 text-[12px] font-medium text-[color:var(--accent)]"
               >
@@ -362,7 +364,7 @@ function Callout({
             ) : (
               <span className="flex items-center gap-1.5 px-1 py-1 text-[11.5px] text-ink-3">
                 <PulseDot />
-                <span>waiting for you…</span>
+                <span>try it now</span>
               </span>
             )
           ) : (
@@ -430,8 +432,8 @@ function calloutStyle(
   rect: DOMRect | null,
   placement: Placement,
 ): React.CSSProperties {
-  const calloutW = 420;
-  const pad = 20;
+  const calloutW = 400;
+  const pad = 16;
   const vw = typeof window !== "undefined" ? window.innerWidth : 1400;
   const vh = typeof window !== "undefined" ? window.innerHeight : 900;
 
@@ -443,14 +445,12 @@ function calloutStyle(
 
   if (!rect || placement === "center") return centered;
 
-  // Clamp helpers
   const clampLeft = (x: number) =>
     Math.max(16, Math.min(x, vw - calloutW - 16));
 
   if (placement === "above") {
     const left = clampLeft(rect.x + rect.width / 2 - calloutW / 2);
     const top = Math.max(16, rect.y - pad);
-    // If target is too close to top, flip to below
     if (top < 160) {
       return {
         top: Math.min(rect.y + rect.height + pad, vh - 280),
@@ -466,7 +466,6 @@ function calloutStyle(
   }
   if (placement === "left") {
     const left = rect.x - pad;
-    // If no room, flip right
     if (left < calloutW + 24) {
       return {
         top: clampY(rect.y + rect.height / 2, vh),
@@ -483,7 +482,6 @@ function calloutStyle(
   if (placement === "right") {
     const left = rect.x + rect.width + pad;
     if (left + calloutW > vw - 16) {
-      // flip left
       return {
         top: clampY(rect.y + rect.height / 2, vh),
         left: rect.x - pad,

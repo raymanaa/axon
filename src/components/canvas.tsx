@@ -15,18 +15,14 @@ import {
   type Edge,
   type OnSelectionChangeParams,
 } from "@xyflow/react";
-import { AnimatePresence } from "framer-motion";
-import { useCallback, useEffect, useMemo, useState, type DragEvent } from "react";
+import { useCallback, useMemo, useState, type DragEvent } from "react";
 import { ConfigPanel } from "@/components/config-panel";
 import { nodeTypes } from "@/components/nodes";
-import { Onboarding, type OnboardingObs } from "@/components/onboarding";
 import { Palette, PALETTE_MIME } from "@/components/palette";
-import { HelpPopover, TopBar } from "@/components/top-bar";
 import {
   NODE_META,
   type AxonNode,
   type AxonNodeData,
-  type LLMData,
   type NodeKind,
 } from "@/lib/node-types";
 
@@ -86,7 +82,7 @@ const INITIAL_NODES: AxonNode[] = [
       kind: "reply",
       label: "Commit decision",
       template:
-        "decision: {{decision}}\nevidence: {{evidence}}\npipeline_version: v{{version}}\nscored_at: {{ts}}",
+        "decision: {{decision}}\nevidence: {{evidence}}\npipeline_version: v{{version}}",
     },
   },
 ];
@@ -98,15 +94,12 @@ const INITIAL_EDGES: Edge[] = [
   { id: "e4-5", source: "n4", target: "n5", sourceHandle: "advance" },
 ];
 
-const INITIAL_IDS = new Set(INITIAL_NODES.map((n) => n.id));
-
-function Workspace() {
+function Surface() {
   const { screenToFlowPosition } = useReactFlow<AxonNode>();
   const [nodes, setNodes, onNodesChange] =
     useNodesState<AxonNode>(INITIAL_NODES);
   const [edges, setEdges, onEdgesChange] = useEdgesState(INITIAL_EDGES);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [helpOpen, setHelpOpen] = useState(false);
 
   const onConnect = useCallback(
     (conn: Connection) => setEdges((eds) => addEdge(conn, eds)),
@@ -132,11 +125,7 @@ function Workspace() {
         id,
         type: kind,
         position,
-        data: {
-          ...(NODE_META[kind] as unknown as object),
-          // re-seed with default data for kind
-          ...defaultDataFor(kind),
-        } as unknown as AxonNodeData,
+        data: defaultDataFor(kind),
       };
       setNodes((nds) => nds.concat(newNode));
     },
@@ -161,101 +150,55 @@ function Workspace() {
     [setNodes],
   );
 
-  // Onboarding observations
-  const obs = useMemo<OnboardingObs>(() => {
-    const scoreNode = nodes.find((n) => n.id === "n3");
-    const scorePrompt = (scoreNode?.data as LLMData | undefined)?.prompt;
-    const userAdded = nodes.filter((n) => !INITIAL_IDS.has(n.id));
-    const userAddedLLM = userAdded.some((n) => n.type === "llm");
-    const userEdgesOnNew = edges.some((e) => {
-      const sourceIsUser = !INITIAL_IDS.has(e.source);
-      const targetIsUser = !INITIAL_IDS.has(e.target);
-      return sourceIsUser || targetIsUser;
-    });
-    return {
-      selectedId,
-      scorePromptEdited:
-        scorePrompt !== undefined && scorePrompt !== SCORE_LLM_PROMPT,
-      userAddedCount: userAdded.length,
-      userAddedLLM,
-      userEdgesOnNew,
-    };
-  }, [nodes, edges, selectedId]);
-
-  // '?' key opens help popover (except in inputs)
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "?" && !helpOpen) {
-        const tag = (e.target as HTMLElement | null)?.tagName ?? "";
-        if (tag === "INPUT" || tag === "TEXTAREA") return;
-        setHelpOpen(true);
-      }
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [helpOpen]);
-
-  const selected = nodes.find((n) => n.id === selectedId) ?? null;
+  const selected = useMemo(
+    () => nodes.find((n) => n.id === selectedId) ?? null,
+    [nodes, selectedId],
+  );
 
   return (
-    <div className="flex h-full w-full flex-col bg-paper">
-      <TopBar nodeCount={nodes.length} onShowHelp={() => setHelpOpen(true)} />
-
-      <div className="flex flex-1 min-h-0">
-        <Palette />
-        <main className="relative flex-1">
-          <ReactFlow<AxonNode>
-            nodes={nodes}
-            edges={edges}
-            nodeTypes={nodeTypes}
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
-            onConnect={onConnect}
-            onSelectionChange={onSelectionChange}
-            onDrop={onDrop}
-            onDragOver={onDragOver}
-            fitView
-            fitViewOptions={{ padding: 0.3, maxZoom: 1.05 }}
-            defaultEdgeOptions={{ type: "default" }}
-            proOptions={{ hideAttribution: true }}
-          >
-            <Background
-              variant={BackgroundVariant.Dots}
-              gap={22}
-              size={1}
-              color="color-mix(in oklab, var(--ink) 14%, transparent)"
-            />
-            <Controls showInteractive={false} position="bottom-left" />
-            <MiniMap
-              pannable
-              zoomable
-              nodeColor={(n) =>
-                NODE_META[(n.type ?? "trigger") as NodeKind].accent
-              }
-              nodeStrokeColor="var(--line-2)"
-              nodeStrokeWidth={1}
-              maskColor="rgba(250, 249, 246, 0.75)"
-              position="bottom-right"
-            />
-          </ReactFlow>
-
-          <CanvasHint empty={nodes.length === 0} />
-        </main>
-        <ConfigPanel node={selected} onUpdate={updateNodeData} />
-      </div>
-
-      <AnimatePresence>
-        {helpOpen && <HelpPopover onClose={() => setHelpOpen(false)} />}
-      </AnimatePresence>
-
-      <Onboarding obs={obs} />
+    <div className="flex h-full w-full">
+      <Palette />
+      <main className="relative flex-1">
+        <ReactFlow<AxonNode>
+          nodes={nodes}
+          edges={edges}
+          nodeTypes={nodeTypes}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          onConnect={onConnect}
+          onSelectionChange={onSelectionChange}
+          onDrop={onDrop}
+          onDragOver={onDragOver}
+          fitView
+          fitViewOptions={{ padding: 0.3, maxZoom: 1.05 }}
+          proOptions={{ hideAttribution: true }}
+        >
+          <Background
+            variant={BackgroundVariant.Dots}
+            gap={22}
+            size={1}
+            color="color-mix(in oklab, var(--ink) 14%, transparent)"
+          />
+          <Controls showInteractive={false} position="bottom-left" />
+          <MiniMap
+            pannable
+            zoomable
+            nodeColor={(n) =>
+              NODE_META[(n.type ?? "trigger") as NodeKind].accent
+            }
+            nodeStrokeColor="var(--line-2)"
+            nodeStrokeWidth={1}
+            maskColor="rgba(250, 249, 246, 0.75)"
+            position="bottom-right"
+          />
+        </ReactFlow>
+      </main>
+      <ConfigPanel node={selected} onUpdate={updateNodeData} />
     </div>
   );
 }
 
 function defaultDataFor(kind: NodeKind): AxonNodeData {
-  // Imported lazily to avoid circular; re-exported from lib
-  // Deliberately mirrors makeNodeData to avoid needing a second pass.
   switch (kind) {
     case "trigger":
       return {
@@ -294,30 +237,10 @@ function defaultDataFor(kind: NodeKind): AxonNodeData {
   }
 }
 
-function CanvasHint({ empty }: { empty: boolean }) {
-  if (!empty) return null;
-  return (
-    <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-      <div className="pointer-events-none max-w-[340px] text-center">
-        <div className="serif-italic text-[28px] leading-[1.15] text-ink-2">
-          Drop a <span className="not-italic">Candidate-in</span> node to begin.
-        </div>
-        <p className="mt-3 text-[12.5px] text-ink-3 leading-relaxed">
-          Pick one from the left panel. Press{" "}
-          <kbd className="inline-flex h-5 min-w-[20px] items-center justify-center rounded border border-line bg-card px-1.5 font-mono text-[11px] text-ink-2">
-            ?
-          </kbd>{" "}
-          for shortcuts.
-        </p>
-      </div>
-    </div>
-  );
-}
-
 export function Canvas() {
   return (
     <ReactFlowProvider>
-      <Workspace />
+      <Surface />
     </ReactFlowProvider>
   );
 }
