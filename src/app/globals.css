@@ -26,9 +26,9 @@
   --color-line-2: var(--line-2);
   --color-accent: var(--accent);
   --color-accent-soft: var(--accent-soft);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-  --font-serif: var(--font-instrument-serif);
+  --font-sans: var(--font-hanken);
+  --font-mono: var(--font-jetbrains);
+  --font-serif: var(--font-fraunces);
 }
 
 html,
@@ -39,9 +39,11 @@ body {
 
 body {
   font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+  font-feature-settings: "ss02", "ss03", "cv11";
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
+  letter-spacing: -0.005em;
 }
 
 /* React Flow light theming */
@@ -143,15 +145,17 @@ body {
   background: var(--ink-3);
 }
 
-/* Serif display helper class */
+/* Serif display helper class — Fraunces, used sparingly for brand moments */
 .serif {
-  font-family: var(--font-serif), "Instrument Serif", Georgia, serif;
+  font-family: var(--font-serif), "Fraunces", "Iowan Old Style", Georgia, serif;
   font-weight: 400;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.015em;
+  font-variation-settings: "opsz" 72, "SOFT" 0, "WONK" 0;
 }
 .serif-italic {
-  font-family: var(--font-serif), "Instrument Serif", Georgia, serif;
+  font-family: var(--font-serif), "Fraunces", "Iowan Old Style", Georgia, serif;
   font-style: italic;
   font-weight: 400;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.015em;
+  font-variation-settings: "opsz" 72, "SOFT" 20, "WONK" 1;
 }
