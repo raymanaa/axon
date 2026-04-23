@@ -132,12 +132,13 @@ function Form({
             </Select>
           </Field>
           <Field
-            label="Prompt"
-            hint="Use {{input}} to reference the previous node's output."
+            label="Rubric (prompt)"
+            hint="Your rubric IS the prompt. Every change becomes part of the audit trail — a new pipeline version."
           >
             <Textarea
-              rows={8}
+              rows={10}
               value={data.prompt}
+              data-onboarding-target="prompt-input"
               onChange={(e) => onUpdate(id, { prompt: e.target.value })}
             />
           </Field>

@@ -11,7 +11,7 @@ type Props = {
 };
 
 export function TopBar({
-  workflowName = "Untitled workflow",
+  workflowName = "Senior backend engineer · screening",
   nodeCount,
   onShowHelp,
 }: Props) {

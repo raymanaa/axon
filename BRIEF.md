@@ -1,77 +1,106 @@
-# Axon — Agent Workflow Builder
+# Axon — Transparent résumé screening
 
-> Name: `axon`. Subdomain: `axon.raymnz.com`. Mode: single-user pilot (no auth).
+> **Name:** `axon` · **Live:** [axon.raymnz.com](https://axon.raymnz.com) · **Mode:** single-user pilot
 
 ## One-liner
-Visual, node-based canvas where you compose multi-step AI agents out of LLM calls, tool calls, branches, and loops — then run them with live streaming logs per node.
+A hiring pipeline you can *explain*. Axon screens candidates through a visible graph — rubric per criterion, evidence per score, signed audit record per decision. Built for NYC Local Law 144 and the EU AI Act.
 
-## Why it's a portfolio piece
-- **React Flow is the protagonist.** Not a bolt-on. Every core interaction lives on the canvas.
-- **AI-SaaS on the nose.** LLM routing, tool use, cost/latency telemetry per node.
-- **UX showcase.** Microinteractions at every affordance: node spawn (spring-in), edge draw (path morph), run (traveling gradient along active edges), per-node streaming tokens, completion pulse.
-- **Demo-able in 30 seconds.** Open canvas → drop 3 nodes → connect → click Run → tokens stream into the node bodies → total cost/latency pill animates in.
+## Why this exists
+AI is already screening the world's résumés. The ATSs (Greenhouse, Lever, Ashby, Workday) and specialist screeners (Eightfold, HireVue, Paradox) all bolt on LLM-powered scoring — and it's all a **black box**. Recruiters can't explain why a candidate was rejected. Hiring managers can't tune the rubric. Legal can't audit the reasoning. And the regulators have arrived:
 
-## Scope (MVP — pilot)
+- **NYC Local Law 144** (enforceable since July 2023) — any automated employment decision tool used to screen NYC candidates must undergo an annual **bias audit** by an independent auditor.
+- **EU AI Act Article 6** (Annex III classifies hiring AI as "high-risk"; obligations phased in through 2026) — requires record-keeping, transparency, human oversight, and explainability for any AI touching employment decisions.
+- **Illinois AI Video Interview Act · Maryland HB 1202 · Colorado SB 205** — similar regimes.
+
+The incumbents' response is compliance theater: a PDF audit, a disclaimer, an opaque model. The moat for a new entrant is **auditability as a first-class product feature, not a report generated after the fact.**
+
+## Product shape
+Every pipeline is a React Flow graph. Every run produces a signed, immutable audit record containing:
+- pipeline version (hashed graph + rubric prompts)
+- per-node scores with verbatim evidence snippets from the résumé
+- branching decisions (which route was taken and why)
+- human reviewer (if any) and their override
+- timestamp and candidate identifier
+
+**The pipeline is the audit.** The recruiter doesn't have to explain the AI — the recruiter shows the pipeline.
+
+## Target customer
+- **Buyer:** Head of Talent Acquisition at 200–2,000 employee company OR founder at a TA-tech startup.
+- **User:** Recruiter, hiring manager, TA operations lead.
+- **Regulatory pull:** NYC-based or EU-facing hiring teams feeling the audit pressure now. Series-B+ SaaS companies planning 50+ hires/year.
+
+## Differentiation
+| | Black-box screeners | Axon |
+|---|---|---|
+| Why rejected? | "Our model scored you low." | "Rubric v12 scored 2/5 on backend (evidence: X, Y). Fit gate routed to hold." |
+| Audit prep | Generate PDF after the fact | Every run IS an audit record |
+| Rubric changes | Engineering ticket | Non-technical user edits the prompt |
+| A/B a rubric | Impossible | Pipeline versioning built in |
+| Bias review | Outsourced to auditor | Visible exclusion clauses in every rubric |
+
+## MVP (pilot) scope
 **In**
-- Canvas with 5 node types: `Trigger`, `LLM`, `Tool (web.fetch | http)`, `Route`, `Reply`.
-- Drag from palette, snap-to-grid, auto-layout (ELK) button, minimap, zoom-to-fit.
-- Per-node config panel (model, prompt template with `{{var}}` interpolation, tool params).
-- Execution engine on Workers: topological run, SSE stream of per-node events (`started`, `token`, `finished`, `error`), cost+latency accounting.
-- Run history table (D1), click a run → canvas replays with timing.
-- Save/load workflows (D1), shareable view-only URL (`/w/:id`).
-- Auth: passwordless email magic link (CF Workers + KV) OR single-user mode for v1. **Default to single-user for pilot speed.**
+- Visual canvas with 5 node kinds: **Candidate in** (Trigger), **Parse / Enrich** (Tool), **Score** (LLM with rubric), **Fit gate** (Route), **Decision** (Reply)
+- Per-Score rubric prompt with explicit demographic-exclusion scaffolding
+- Pipeline versioning (graph hash) — future-proof for audit diff
+- Save/load pipelines · CRUD workflows (M3)
+- Run a pipeline against a sample résumé; stream node-level evidence live (M4-M5)
+- Run history table → replay any past run on the canvas with timing (M7)
+- Signed audit log export (CSV/JSON) with rubric version + evidence chain
 
 **Out (v2+)**
-- Team accounts, RBAC, API keys per user.
-- Node marketplace / custom nodes.
-- Triggers beyond manual (webhook, cron).
-- Vector/embedding nodes.
-- Non-Gemini providers.
+- Real ATS integrations (Greenhouse, Lever webhooks)
+- Bulk re-score on rubric change
+- Bias metrics dashboard (adverse impact ratio per group, when protected-class data available)
+- Team accounts / reviewer queues / RBAC
+- Self-serve export to ATS
 
-## Signature animations (the polish bar)
-1. **Edge runtime glow** — while a node runs, its outgoing edges animate a gradient pulse toward downstream nodes. `requestAnimationFrame` + SVG `stroke-dashoffset`.
-2. **Token stream inside node** — LLM nodes show streaming tokens inside the node body with a cursor blink, width auto-grows with spring physics (framer-motion `layout`).
-3. **Node status halo** — idle (none), queued (breathing ring), running (rotating conic gradient), done (green pulse then fade), error (red shake).
-4. **Palette drag preview** — dragging a palette item shows a translucent ghost that snaps into the canvas with a small "drop" spring.
-5. **Run summary pill** — bottom-center pill with total latency + cost that morphs in on completion.
+## Narrative demo (what a recruiter sees, 90 sec)
+1. Open Axon → "Senior backend engineer · screening" pipeline prewired.
+2. Click **Score: Backend experience** → right panel shows the rubric. Edit it: require 5+ years and on-call experience. Save.
+3. Click **+ Score** on palette → drag onto canvas. Rename: "Score: System design depth." Edit rubric.
+4. Wire it: Parse → new Score → Fit gate.
+5. Drop a sample résumé onto the Candidate-in node.
+6. The canvas lights up: parse → score-backend (evidence streams in) → score-system-design (same) → fit gate routes to "advance" → decision writes audit record.
+7. Click the decision node: full audit trail renders with rubric version hash, per-node evidence, timestamp.
 
-## Stack
+## Stack (unchanged from scaffold)
 | Layer | Choice | Why |
 |---|---|---|
-| Framework | Next 15 (App Router) on **Cloudflare Pages** | SSR + edge, lets Workers API colocate |
-| Canvas | `@xyflow/react` (React Flow 12) | Industry standard; custom node support |
-| Motion | `framer-motion` | Springs + `layout` animations |
-| Layout | `elkjs` | Auto-arrange button |
-| Styling | Tailwind + `shadcn/ui` | Speed + consistent primitives |
-| Exec API | Cloudflare Workers (separate Worker) | Long-running, streams SSE |
-| State | **D1** (workflows, runs, run_events) + **KV** (session) | Cheap, edge |
-| LLM | Gemini 2.5 Flash (default) / 2.5 Pro (per-node override) | Already provisioned |
-| Auth (pilot) | None / single-user token in KV | Ship fast |
-| Deploy | Next on CF via `@opennextjs/cloudflare` (Workers + static assets); domain `axon.raymnz.com` | Existing zone |
+| Framework | Next 16 (App Router) + static export | Frontend is client-heavy canvas; no SSR needed |
+| Canvas | `@xyflow/react` 12 | Central to the product, not decoration |
+| Motion | `framer-motion` | Interactive onboarding + streaming evidence reveal |
+| Styling | Tailwind 4 + editorial palette (paper, ink, terracotta) | Anthropic-inspired; avoids "AI slop" aesthetic |
+| Fonts | Instrument Serif (display) + Geist Sans/Mono | Serif italic for brand moments, mono for rubric versions |
+| Frontend deploy | Cloudflare Workers + Static Assets | Simple; no SSR worker |
+| Exec engine | Separate Cloudflare Worker (M4) | POST /run · SSE stream back to canvas |
+| Store | D1 (pipelines, runs, run_events) · R2 (résumé PDFs) · KV (session) | All edge-native |
+| LLM | Gemini 2.5 Flash default / Pro for heavier rubrics | Already wired |
+| Auth | Single-user pilot → magic-link (post-M9) | Ships first |
+| Deploy URL | `axon.raymnz.com` | Custom domain already bound |
 
-## Data model (v1)
+## Data model
 ```
-workflows(id, name, graph_json, created_at, updated_at)
-runs(id, workflow_id, status, started_at, finished_at, total_tokens, total_cost_usd)
-run_events(id, run_id, node_id, type, data_json, ts)   -- type: started|token|finished|error
+pipelines(id, name, graph_json, graph_hash, created_at, updated_at)
+pipeline_versions(id, pipeline_id, graph_json, graph_hash, created_at)
+candidates(id, name, resume_pdf_r2_key, metadata_json, created_at)
+runs(id, pipeline_version_id, candidate_id, status, started_at, finished_at,
+     final_decision, reviewer_id)
+run_events(id, run_id, node_id, type, data_json, ts)  -- type: started|score|evidence|route|finished|error
 ```
 
-## Milestones
-1. **M1 — Scaffold + canvas stub.** Repo, deploy pipeline, empty canvas renders with one dummy node. Deployed at `axon.raymnz.com`.
-2. **M2 — Node types + config panel.** 5 node types render, palette drag works, config panel bound to node data.
-3. **M3 — Save/load.** D1 schema, workflows CRUD API, canvas persists.
-4. **M4 — Execution engine.** Workers endpoint `/run`, topological execution of a linear graph, Gemini call, cost accounting.
-5. **M5 — Streaming + live UI.** SSE from Worker, token streaming into nodes, edge glow, status halo.
-6. **M6 — Routing + loops.** `Route` node (LLM-powered classification), handle branches, cycle detection.
-7. **M7 — Run history + replay.** Runs table, click → canvas replay with timing scrubber.
-8. **M8 — Polish pass.** All 5 signature animations dialed, empty states, error states, shareable view-only URL.
-9. **M9 — README + demo GIF.** Portfolio-facing README with hero GIF, architecture diagram, "try it" CTA.
+## Milestones (updated to product framing)
+1. **M1 — Scaffold + canvas stub.** ✅ Shipped.
+2. **M2 — Node kinds + config panel + interactive onboarding.** ✅ Shipped.
+3. **M3 — Save/load pipelines (D1).** CRUD + versioning on save.
+4. **M4 — Execution engine.** Separate Worker `/run`, topological sort, Gemini call per Score node with rubric, evidence extraction, SSE per-event stream.
+5. **M5 — Live canvas execution.** Evidence snippets stream into Score nodes, edge glow on active branch, status halo per node, final decision animates in.
+6. **M6 — Fit gate routing + sample-candidate runner.** Route node picks branch based on upstream scores; a sample-résumé upload widget lets you run without ATS integration.
+7. **M7 — Run history + audit replay.** Runs table, click → load pipeline AT THAT VERSION, replay events with timing scrubber. This IS the audit surface.
+8. **M8 — Polish pass.** Signature animations dialed, empty states, sharable view-only audit URL.
+9. **M9 — README + hero demo.** Portfolio README with market pitch, hero GIF (90-sec demo above), architecture diagram, "try it yourself" with seeded sample candidate.
 
-## Decisions locked
-- Name: **axon**
-- Subdomain: **axon.raymnz.com** (zone `249a7fb8948a8aa44b2d2202d7483e50`)
-- Auth: **none** (single-user pilot)
-- Stack: **Next 15 + @opennextjs/cloudflare** on Workers
-
-## Still open
-- Hero demo content (default: "summarize latest HN top 5" as canned example)
+## Open questions (not blocking M3)
+- Exact export format for audit records (CSV? PDF? both? signed with what?)
+- How aggressive to be about demographic-signal exclusion — hard stops or warnings?
+- Rubric templates per role family (backend, frontend, PM, designer) as a seeded library?

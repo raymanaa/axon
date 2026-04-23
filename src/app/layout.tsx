@@ -20,9 +20,9 @@ const instrumentSerif = Instrument_Serif({
 });
 
 export const metadata: Metadata = {
-  title: "Axon — Agent Workflow Builder",
+  title: "Axon — Transparent résumé screening",
   description:
-    "Compose multi-step AI agents on a canvas. Wire triggers, language models, tools, and routes.",
+    "Screen candidates with a hiring pipeline you can actually explain. Every score, every decision, fully auditable. Built for NYC Local Law 144 and the EU AI Act.",
 };
 
 export default function RootLayout({

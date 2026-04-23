@@ -51,74 +51,82 @@ export type AxonNode = Node<AxonNodeData, NodeKind>;
 
 /**
  * Restrained editorial palette — each kind gets one precise accent
- * shown as a 4px square in the node header, nothing more.
+ * shown as a 9x9 colored square in the node header, nothing more.
+ * Copy is framed for the resume-screening use case.
  */
 export const NODE_META: Record<
   NodeKind,
   { title: string; accent: string; description: string; hint: string }
 > = {
   trigger: {
-    title: "Trigger",
+    title: "Candidate in",
     accent: "#3d8b5a",
-    description: "Start a run",
-    hint: "Where a workflow begins.",
+    description: "ATS webhook · upload",
+    hint: "Where an application enters the pipeline.",
   },
   llm: {
-    title: "Language model",
+    title: "Score",
     accent: "#181715",
-    description: "Prompt Gemini",
-    hint: "Sends a prompt; streams back tokens.",
+    description: "Rubric · Gemini",
+    hint: "A rubric as a prompt. Scores the candidate 1–5 with evidence.",
   },
   tool: {
-    title: "Tool",
+    title: "Parse · Enrich",
     accent: "#3b5884",
-    description: "HTTP · fetch",
-    hint: "Calls an external API.",
+    description: "HTTP call",
+    hint: "Extracts structured fields from the résumé, or enriches from LinkedIn / GitHub.",
   },
   route: {
-    title: "Route",
+    title: "Fit gate",
     accent: "#b45309",
-    description: "Classify & branch",
-    hint: "Picks a branch based on input.",
+    description: "Branch on score",
+    hint: "Routes the candidate to advance, hold, or reject based on upstream scores.",
   },
   reply: {
-    title: "Reply",
+    title: "Decision",
     accent: "#8a3a20",
-    description: "Final response",
-    hint: "Renders the workflow's output.",
+    description: "Write audit record",
+    hint: "Commits the final decision + evidence chain to the audit log.",
   },
 };
 
 export function makeNodeData(kind: NodeKind): AxonNodeData {
   switch (kind) {
     case "trigger":
-      return { kind, label: "Start", subtitle: "Manual run" };
+      return {
+        kind,
+        label: "New application",
+        subtitle: "Webhook from ATS",
+      };
     case "llm":
       return {
         kind,
-        label: "Summarize",
+        label: "Score: Communication skills",
         model: "gemini-2.5-flash",
-        prompt: "Summarize the input in one sentence.",
+        prompt:
+          "Score this candidate 1–5 on written communication. Cite two snippets from the résumé that support your score. Ignore name, age, location, school, and any demographic signals.",
       };
     case "tool":
       return {
         kind,
-        label: "Fetch",
+        label: "Enrich from LinkedIn",
         method: "GET",
-        url: "https://hacker-news.firebaseio.com/v0/topstories.json",
+        url: "https://api.example.com/enrich/linkedin",
       };
     case "route":
       return {
         kind,
-        label: "Classify",
-        classifier: "Is the input a question or a command?",
-        classes: ["question", "command"],
+        label: "Fit gate",
+        classifier:
+          "Given the scores above, should this candidate advance, hold for later review, or be rejected?",
+        classes: ["advance", "hold", "reject"],
       };
     case "reply":
       return {
         kind,
-        label: "Reply",
-        template: "{{previous}}",
+        label: "Commit decision",
+        template:
+          "decision: {{decision}}\nevidence: {{evidence}}\nscored_by_pipeline_version: v{{version}}",
       };
   }
 }
