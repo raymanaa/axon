@@ -145,9 +145,13 @@ export function HelpPopover({ onClose }: { onClose: () => void }) {
 }
 
 const SHORTCUTS: { keys: string[]; label: string }[] = [
-  { keys: ["⌫"], label: "Delete selected node or edge" },
-  { keys: ["Esc"], label: "Deselect" },
-  { keys: ["Shift", "Drag"], label: "Box-select" },
-  { keys: ["Space", "Drag"], label: "Pan canvas" },
+  { keys: ["⌘", "K"], label: "Command palette" },
+  { keys: ["/"], label: "Focus filter" },
+  { keys: ["J"], label: "Next candidate" },
+  { keys: ["K"], label: "Previous candidate" },
+  { keys: ["A"], label: "Mark selected: advance" },
+  { keys: ["H"], label: "Mark selected: hold" },
+  { keys: ["R"], label: "Mark selected: reject" },
+  { keys: ["Esc"], label: "Close panel / dismiss" },
   { keys: ["?"], label: "Show this help" },
 ];
