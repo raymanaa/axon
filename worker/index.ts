@@ -28,11 +28,190 @@ async function handleApi(
     return handleScore(request, env);
   }
 
+  if (url.pathname === "/api/score-stream" && request.method === "POST") {
+    return handleScoreStream(request, env);
+  }
+
   if (url.pathname === "/api/health" && request.method === "GET") {
     return json({ ok: true, ts: Date.now() });
   }
 
   return json({ error: "not_found", path: url.pathname }, { status: 404 });
+}
+
+async function handleScoreStream(request: Request, env: Env): Promise<Response> {
+  let body: ScoreRequest;
+  try {
+    body = (await request.json()) as ScoreRequest;
+  } catch {
+    return json({ error: "invalid_json" }, { status: 400 });
+  }
+
+  if (!body?.candidate?.resumeSummary || !body?.criterion?.name) {
+    return json({ error: "missing_fields" }, { status: 400 });
+  }
+
+  const model = body.model ?? "gemini-2.5-flash";
+  const prompt = buildScoringPrompt(body);
+
+  const { readable, writable } = new TransformStream();
+  const writer = writable.getWriter();
+  const encoder = new TextEncoder();
+
+  const write = (obj: unknown) =>
+    writer.write(encoder.encode(JSON.stringify(obj) + "\n"));
+
+  (async () => {
+    await write({ type: "status", phase: "reading" });
+
+    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?key=${env.GEMINI_API_KEY}&alt=sse`;
+
+    let resp: Response;
+    try {
+      resp = await fetch(geminiUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
+          generationConfig: {
+            temperature: 0.1,
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: "object",
+              properties: {
+                score: { type: "number" },
+                evidence: {
+                  type: "array",
+                  items: { type: "string" },
+                  minItems: 1,
+                  maxItems: 4,
+                },
+                reasoning: { type: "string" },
+              },
+              required: ["score", "evidence", "reasoning"],
+            },
+          },
+        }),
+      });
+    } catch (err) {
+      await write({
+        type: "error",
+        error: err instanceof Error ? err.message : "fetch failed",
+      });
+      await writer.close();
+      return;
+    }
+
+    if (!resp.ok || !resp.body) {
+      const text = await resp.text().catch(() => "");
+      await write({
+        type: "error",
+        status: resp.status,
+        error: text.slice(0, 400) || "gemini stream failed",
+      });
+      await writer.close();
+      return;
+    }
+
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let accumulated = "";
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+        for (const raw of lines) {
+          const line = raw.trim();
+          if (!line || !line.startsWith("data:")) continue;
+          const jsonStr = line.slice(5).trim();
+          if (!jsonStr || jsonStr === "[DONE]") continue;
+          try {
+            const chunk = JSON.parse(jsonStr) as {
+              candidates?: { content?: { parts?: { text?: string }[] } }[];
+            };
+            const text = chunk?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+            if (text) {
+              accumulated += text;
+              await write({ type: "partial", text, total: accumulated.length });
+            }
+          } catch {
+            /* ignore malformed chunk */
+          }
+        }
+      }
+    } catch (err) {
+      await write({
+        type: "error",
+        error: err instanceof Error ? err.message : "stream read failed",
+      });
+      await writer.close();
+      return;
+    }
+
+    // Parse final aggregated text into structured result
+    let parsed: { score?: number; evidence?: string[]; reasoning?: string };
+    try {
+      parsed = JSON.parse(accumulated);
+    } catch {
+      const match = accumulated.match(/\{[\s\S]*\}/);
+      if (match) {
+        try {
+          parsed = JSON.parse(match[0]);
+        } catch {
+          await write({
+            type: "error",
+            error: "could not parse model output as JSON",
+            raw: accumulated.slice(0, 400),
+          });
+          await writer.close();
+          return;
+        }
+      } else {
+        await write({
+          type: "error",
+          error: "no JSON object in model output",
+          raw: accumulated.slice(0, 400),
+        });
+        await writer.close();
+        return;
+      }
+    }
+
+    const score = Math.max(1, Math.min(5, Number(parsed.score ?? 0)));
+    const evidence = Array.isArray(parsed.evidence)
+      ? parsed.evidence
+          .filter((s): s is string => typeof s === "string" && s.trim().length > 0)
+          .slice(0, 4)
+      : [];
+    const reasoning =
+      typeof parsed.reasoning === "string" ? parsed.reasoning : "";
+
+    await write({
+      type: "complete",
+      data: {
+        score,
+        evidence,
+        reasoning,
+        model,
+        pipelineVersion: "v12",
+        pipelineHash: "3a7f9c2",
+      },
+    });
+    await writer.close();
+  })();
+
+  return new Response(readable, {
+    headers: {
+      "Content-Type": "application/x-ndjson; charset=utf-8",
+      "Cache-Control": "no-cache, no-transform",
+      "X-Accel-Buffering": "no",
+    },
+  });
 }
 
 type ScoreRequest = {

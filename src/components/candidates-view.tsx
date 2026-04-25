@@ -14,7 +14,7 @@ import {
 import { useCallback, useMemo, useState } from "react";
 import { ScoreBar, ScoreNumber } from "@/components/score-bar";
 import { StatusPill } from "@/components/status-pill";
-import { scoreCandidate } from "@/lib/api";
+import { scoreCandidateStream } from "@/lib/api";
 import {
   auditEntriesForCandidate,
   formatRelative,
@@ -269,14 +269,16 @@ function DetailPanel({
   const [rescoring, setRescoring] = useState<Record<string, boolean>>({});
   const [rescoreErr, setRescoreErr] = useState<string | null>(null);
   const [reasoning, setReasoning] = useState<Record<string, string>>({});
+  const [partial, setPartial] = useState<Record<string, string>>({});
 
   const runRescore = useCallback(
     async (crit: Criterion) => {
       setRescoring((r) => ({ ...r, [crit.id]: true }));
       setRescoreErr(null);
+      setPartial((p) => ({ ...p, [crit.id]: "" }));
       const prev = candidate.scores[crit.id]?.score ?? 0;
       try {
-        const result = await scoreCandidate(
+        const result = await scoreCandidateStream(
           {
             name: candidate.name,
             headline: candidate.headline,
@@ -290,6 +292,13 @@ function DetailPanel({
             excludes: crit.excludes,
           },
           "gemini-2.5-flash",
+          {
+            onPartial: (text) =>
+              setPartial((p) => ({
+                ...p,
+                [crit.id]: (p[crit.id] ?? "") + text,
+              })),
+          },
         );
         onRescore(candidate.id, crit.id, prev, {
           score: result.score,
@@ -302,6 +311,15 @@ function DetailPanel({
         setRescoreErr(e instanceof Error ? e.message : "Unknown error");
       } finally {
         setRescoring((r) => ({ ...r, [crit.id]: false }));
+        // Hold the partial text for a moment so the fade-out doesn't jank,
+        // then clear it
+        setTimeout(() => {
+          setPartial((p) => {
+            const next = { ...p };
+            delete next[crit.id];
+            return next;
+          });
+        }, 400);
       }
     },
     [candidate, onRescore],
@@ -397,6 +415,7 @@ function DetailPanel({
                   criterion={crit}
                   cell={cell}
                   loading={!!loading}
+                  partial={partial[crit.id]}
                   reasoning={reasoning[crit.id]}
                   onRescore={() => runRescore(crit)}
                 />
@@ -465,17 +484,25 @@ function ScoreCard({
   criterion,
   cell,
   loading,
+  partial,
   reasoning,
   onRescore,
 }: {
   criterion: Criterion;
   cell: ScoreCell | undefined;
   loading: boolean;
+  partial?: string;
   reasoning?: string;
   onRescore: () => void;
 }) {
   return (
-    <div className="rounded-lg border border-line bg-card">
+    <motion.div
+      layout
+      className={[
+        "rounded-lg border bg-card transition-colors",
+        loading ? "border-[color:var(--accent)]/50" : "border-line",
+      ].join(" ")}
+    >
       <div className="flex items-center justify-between px-4 py-3 border-b border-line">
         <div className="min-w-0">
           <div className="text-[13px] font-medium text-ink">
@@ -488,14 +515,19 @@ function ScoreCard({
         <div className="flex items-center gap-3">
           <div className="text-right">
             {cell ? (
-              <>
+              <motion.div
+                key={cell.score}
+                initial={{ opacity: 0, y: -4, scale: 0.96 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                transition={{ duration: 0.26, ease: [0.2, 0, 0.2, 1] }}
+              >
                 <div className="text-[13.5px]">
                   <ScoreNumber score={cell.score} />
                 </div>
                 <div className="mt-1 w-[100px]">
                   <ScoreBar score={cell.score} />
                 </div>
-              </>
+              </motion.div>
             ) : (
               <span className="text-ink-3 text-[11.5px]">—</span>
             )}
@@ -518,15 +550,19 @@ function ScoreCard({
 
       <div className="px-4 py-3">
         {loading ? (
-          <div className="flex items-center gap-2 text-[12px] text-ink-3">
-            <Loader2 className="h-3 w-3 animate-spin" strokeWidth={2} />
-            <span>Gemini is reading the résumé…</span>
-          </div>
+          <ThinkingBlock partial={partial} />
         ) : cell ? (
-          <ul className="space-y-2">
+          <motion.ul className="space-y-2" layout>
             {cell.evidence.map((ev, i) => (
-              <li
-                key={i}
+              <motion.li
+                key={`${ev.slice(0, 20)}-${i}`}
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{
+                  duration: 0.22,
+                  delay: 0.04 * i,
+                  ease: [0.2, 0, 0.2, 1],
+                }}
                 className="flex gap-2 text-[12.5px] leading-[1.6] text-ink-2"
               >
                 <Quote
@@ -534,21 +570,99 @@ function ScoreCard({
                   strokeWidth={2}
                 />
                 <span>{ev}</span>
-              </li>
+              </motion.li>
             ))}
-          </ul>
+          </motion.ul>
         ) : null}
 
         {reasoning && !loading && (
-          <div className="mt-3 rounded-md bg-paper border border-line px-3 py-2 text-[11.5px] leading-[1.6] text-ink-2">
+          <motion.div
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2, duration: 0.22 }}
+            className="mt-3 rounded-md bg-paper border border-line px-3 py-2 text-[11.5px] leading-[1.6] text-ink-2"
+          >
             <div className="text-[10px] font-mono uppercase tracking-[0.16em] text-ink-3 mb-1">
               Reasoning
             </div>
             {reasoning}
-          </div>
+          </motion.div>
+        )}
+      </div>
+    </motion.div>
+  );
+}
+
+function ThinkingBlock({ partial }: { partial?: string }) {
+  const hasText = !!partial && partial.length > 0;
+  // Extract already-detected evidence strings from partial JSON as they arrive
+  const matches = hasText
+    ? Array.from(
+        partial!.matchAll(/"([^"\\]{6,}(?:\\.[^"\\]*)*)"/g),
+      ).map((m) => m[1])
+    : [];
+  // Very naive heuristic: the 'evidence' array items come after the key "evidence"
+  const evIdx = partial?.indexOf('"evidence"') ?? -1;
+  const evMatches =
+    evIdx >= 0 && hasText
+      ? Array.from(
+          partial!.slice(evIdx).matchAll(/"([^"\\]{10,}(?:\\.[^"\\]*)*)"/g),
+        )
+          .map((m) => m[1])
+          .slice(1) // first match is 'evidence' key itself
+      : [];
+  // show unique evidence snippets found so far (max 3)
+  const shown = Array.from(new Set(evMatches)).slice(0, 3);
+  return (
+    <div className="flex items-start gap-2.5 rounded-md border border-dashed border-line bg-paper/60 px-3 py-2.5 text-[11.5px] text-ink-2">
+      <div className="flex items-center gap-1 pt-[3px]">
+        <ThinkingDots />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-ink-3">
+          Gemini is reading the résumé
+        </div>
+        {shown.length > 0 && (
+          <ul className="mt-1.5 space-y-1">
+            {shown.map((s, i) => (
+              <motion.li
+                key={i}
+                initial={{ opacity: 0, x: -4 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.2 }}
+                className="flex gap-1.5 text-[12px] leading-snug"
+              >
+                <span aria-hidden className="text-ink-3">·</span>
+                <span className="text-ink-2 line-clamp-1">{s}</span>
+              </motion.li>
+            ))}
+          </ul>
+        )}
+        {!matches.length && (
+          <div className="mt-1 h-3 w-24 rounded-full bg-line animate-pulse" />
         )}
       </div>
     </div>
+  );
+}
+
+function ThinkingDots() {
+  return (
+    <span className="inline-flex gap-1" aria-hidden>
+      {[0, 1, 2].map((i) => (
+        <motion.span
+          key={i}
+          className="h-1 w-1 rounded-full bg-[color:var(--accent)]"
+          animate={{ opacity: [0.3, 1, 0.3] }}
+          transition={{
+            duration: 1.1,
+            repeat: Infinity,
+            delay: i * 0.18,
+            ease: "easeInOut",
+          }}
+        />
+      ))}
+    </span>
   );
 }
 
