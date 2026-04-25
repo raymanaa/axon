@@ -4,7 +4,10 @@ import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowRight,
   Check,
+  Copy,
+  ExternalLink,
   FileSignature,
+  Link2,
   Loader2,
   Quote,
   RefreshCcw,
@@ -27,11 +30,13 @@ import {
 import {
   CANDIDATES,
   CRITERIA,
+  ROLES,
   type Candidate,
   type Criterion,
   type RoleId,
   type ScoreCell,
 } from "@/lib/mock-data";
+import { buildCandidateShare, encodeShareable } from "@/lib/share";
 
 type Props = {
   roleId: RoleId;
@@ -137,6 +142,8 @@ export function CandidatesView({
             criteria={criteria}
             entries={selectedEntries}
             fitGate={fitGate[selected.id] ?? null}
+            scoreOverrides={scoreOverrides}
+            roleId={roleId}
             onClose={() => onSelect(null)}
             onDecision={onDecision}
             onRescore={onRescore}
@@ -271,6 +278,8 @@ function DetailPanel({
   criteria,
   entries,
   fitGate,
+  scoreOverrides,
+  roleId,
   onClose,
   onDecision,
   onRescore,
@@ -280,6 +289,8 @@ function DetailPanel({
   criteria: Criterion[];
   entries: AuditEntry[];
   fitGate: FitGateResult | null;
+  scoreOverrides: ScoreMap;
+  roleId: RoleId;
   onClose: () => void;
   onDecision: (id: string, d: Candidate["status"]) => void;
   onRescore: Props["onRescore"];
@@ -424,13 +435,23 @@ function DetailPanel({
             </div>
           </div>
         </div>
-        <button
-          onClick={onClose}
-          className="flex h-7 w-7 items-center justify-center rounded-md text-ink-3 hover:bg-paper-2 hover:text-ink transition-colors"
-          aria-label="Close"
-        >
-          <X className="h-4 w-4" strokeWidth={2} />
-        </button>
+        <div className="flex items-center gap-1">
+          <SharePopover
+            candidate={candidate}
+            criteria={criteria}
+            entries={entries}
+            fitGate={fitGate}
+            scoreOverrides={scoreOverrides}
+            roleId={roleId}
+          />
+          <button
+            onClick={onClose}
+            className="flex h-7 w-7 items-center justify-center rounded-md text-ink-3 hover:bg-paper-2 hover:text-ink transition-colors"
+            aria-label="Close"
+          >
+            <X className="h-4 w-4" strokeWidth={2} />
+          </button>
+        </div>
       </header>
 
       <div className="flex-1 overflow-y-auto">
@@ -576,6 +597,134 @@ function DetailPanel({
         )}
       </div>
     </motion.aside>
+  );
+}
+
+/* ---------- Share popover ---------- */
+
+function SharePopover({
+  candidate,
+  criteria,
+  entries,
+  fitGate,
+  scoreOverrides,
+  roleId,
+}: {
+  candidate: Candidate;
+  criteria: Criterion[];
+  entries: AuditEntry[];
+  fitGate: FitGateResult | null;
+  scoreOverrides: ScoreMap;
+  roleId: RoleId;
+}) {
+  const [open, setOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const role = ROLES.find((r) => r.id === roleId);
+
+  const url = useMemo(() => {
+    if (!role || !open) return "";
+    const share = buildCandidateShare({
+      role,
+      candidate,
+      criteria,
+      scoreOverrides,
+      fitGate,
+      entries,
+      effectiveStatus: candidate.status,
+    });
+    const encoded = encodeShareable(share);
+    if (typeof window === "undefined") return `/audit?c=${encoded}`;
+    return `${window.location.origin}/audit?c=${encoded}`;
+  }, [open, role, candidate, criteria, scoreOverrides, fitGate, entries]);
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1600);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="flex h-7 w-7 items-center justify-center rounded-md text-ink-3 hover:bg-paper-2 hover:text-ink transition-colors"
+        aria-label="Share audit receipt"
+        title="Share audit receipt"
+      >
+        <Link2 className="h-4 w-4" strokeWidth={2} />
+      </button>
+      <AnimatePresence>
+        {open && (
+          <>
+            <div
+              className="fixed inset-0 z-20"
+              onClick={() => setOpen(false)}
+            />
+            <motion.div
+              initial={{ opacity: 0, y: -4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -4 }}
+              transition={{ duration: 0.18 }}
+              className="absolute right-0 top-10 z-30 w-[340px] rounded-xl border border-line bg-card shadow-[0_14px_40px_rgba(24,23,21,0.14)]"
+            >
+              <div className="px-4 py-3 border-b border-line">
+                <div className="text-[10.5px] font-mono uppercase tracking-[0.18em] text-ink-3">
+                  Share audit receipt
+                </div>
+                <p className="mt-1.5 text-[11.5px] leading-[1.55] text-ink-2">
+                  A public URL encoded with every score, evidence snippet,
+                  fit-gate decision, and override for {candidate.name}. No
+                  server needed — the data rides in the link.
+                </p>
+              </div>
+              <div className="px-4 py-3">
+                <div className="flex items-center gap-2">
+                  <input
+                    readOnly
+                    value={url}
+                    className="flex-1 rounded-md border border-line bg-paper px-2.5 py-1.5 font-mono text-[11px] text-ink-2 truncate outline-none focus:border-[color:var(--accent)]"
+                  />
+                  <button
+                    onClick={copy}
+                    className="flex items-center gap-1 rounded-md bg-ink px-2.5 py-1.5 text-[11.5px] font-medium text-paper hover:bg-[color:var(--ink-2)] transition-colors"
+                  >
+                    {copied ? (
+                      <>
+                        <Check className="h-3 w-3" strokeWidth={2.5} />
+                        <span>Copied</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="h-3 w-3" strokeWidth={2} />
+                        <span>Copy</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+                <a
+                  href={url}
+                  target="_blank"
+                  rel="noopener"
+                  className="mt-2 inline-flex items-center gap-1 text-[11px] text-ink-2 hover:text-ink transition-colors"
+                >
+                  <ExternalLink className="h-3 w-3" strokeWidth={2} />
+                  Open receipt in new tab
+                </a>
+              </div>
+              <div className="px-4 py-2.5 border-t border-line bg-paper-2 text-[10.5px] text-ink-3 leading-[1.55]">
+                Shared links are freshly encoded each time you open this
+                dialog. No audit data is sent to a server.
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+    </div>
   );
 }
 
