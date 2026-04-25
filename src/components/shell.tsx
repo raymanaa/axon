@@ -4,9 +4,10 @@ import { AnimatePresence } from "framer-motion";
 import { HelpCircle } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AuditView } from "@/components/audit-view";
+import { AuditLogView } from "@/components/audit-log-view";
 import { CandidatesView } from "@/components/candidates-view";
 import { CriteriaView } from "@/components/criteria-view";
+import { PipelineView } from "@/components/pipeline-view";
 import { Onboarding, type OnboardingObs } from "@/components/onboarding";
 import { RoleTabs, type RoleTab } from "@/components/role-tabs";
 import { RolesNav } from "@/components/roles-nav";
@@ -253,7 +254,10 @@ export function Shell() {
             />
           )}
           {activeTab === "criteria" && <CriteriaView roleId={activeRoleId} />}
-          {activeTab === "audit" && <AuditView />}
+          {activeTab === "pipeline" && <PipelineView />}
+          {activeTab === "audit" && (
+            <AuditLogView roleId={activeRoleId} entries={auditEntries} />
+          )}
         </div>
       </div>
 

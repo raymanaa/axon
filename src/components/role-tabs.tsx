@@ -1,23 +1,24 @@
 "use client";
 
-import { FileSearch, SlidersHorizontal, Users } from "lucide-react";
+import {
+  FileSearch,
+  GitBranch,
+  ScrollText,
+  SlidersHorizontal,
+  Users,
+} from "lucide-react";
 
-export type RoleTab = "candidates" | "criteria" | "audit";
+export type RoleTab = "candidates" | "criteria" | "pipeline" | "audit";
 
 const TABS: {
   id: RoleTab;
   label: string;
   icon: typeof Users;
-  hint: string;
 }[] = [
-  { id: "candidates", label: "Candidates", icon: Users, hint: "Review, decide" },
-  {
-    id: "criteria",
-    label: "Criteria",
-    icon: SlidersHorizontal,
-    hint: "What we screen for",
-  },
-  { id: "audit", label: "Audit", icon: FileSearch, hint: "How decisions are made" },
+  { id: "candidates", label: "Candidates", icon: Users },
+  { id: "criteria", label: "Criteria", icon: SlidersHorizontal },
+  { id: "pipeline", label: "Pipeline", icon: GitBranch },
+  { id: "audit", label: "Audit", icon: ScrollText },
 ];
 
 export function RoleTabs({
@@ -58,3 +59,5 @@ export function RoleTabs({
     </div>
   );
 }
+// Keep FileSearch import referenced to avoid unused warning if a consumer still expects it
+void FileSearch;

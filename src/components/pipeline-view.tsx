@@ -1,9 +1,9 @@
 "use client";
 
-import { ShieldCheck } from "lucide-react";
+import { GitBranch } from "lucide-react";
 import { Canvas } from "@/components/canvas";
 
-export function AuditView() {
+export function PipelineView() {
   return (
     <div className="flex flex-1 flex-col min-h-0">
       <div className="border-b border-line bg-paper px-8 py-4">
@@ -12,17 +12,17 @@ export function AuditView() {
             aria-hidden
             className="mt-[3px] flex h-6 w-6 items-center justify-center rounded-md bg-card border border-line"
           >
-            <ShieldCheck className="h-3.5 w-3.5 text-ink-2" strokeWidth={1.75} />
+            <GitBranch className="h-3.5 w-3.5 text-ink-2" strokeWidth={1.75} />
           </span>
           <div className="flex-1 min-w-0">
             <h2 className="serif text-[20px] leading-[1.2] text-ink">
               The pipeline <span className="serif-italic">is</span> the audit.
             </h2>
             <p className="mt-1 max-w-[680px] text-[12.5px] leading-[1.65] text-ink-2">
-              This is the underlying graph every candidate runs through. When
-              an auditor asks <em>how</em> a decision was made, you show them
-              this. Most recruiters never need to open this tab — it's here for
-              compliance, legal, and hiring-manager review.
+              The underlying graph every candidate runs through. Parse résumé →
+              score each criterion → Fit gate routes advance / hold / reject
+              → commit decision. Most recruiters never need to open this tab;
+              it's here for compliance, legal, and hiring-manager review.
             </p>
           </div>
           <div className="hidden md:block text-right">
