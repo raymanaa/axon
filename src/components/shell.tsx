@@ -13,15 +13,20 @@ import { RolesNav } from "@/components/roles-nav";
 import { HelpPopover } from "@/components/top-bar";
 import {
   appendDecisionEntry,
+  appendFitGateEntry,
   appendRescoreEntry,
   loadAuditLog,
   loadDecisions,
+  loadFitGate,
   loadScores,
   saveDecisions,
+  saveFitGate,
   saveScores,
   scoreKey,
   type AuditEntry,
   type DecisionMap,
+  type FitGateMap,
+  type FitGateResult,
   type ScoreMap,
 } from "@/lib/audit-log";
 import {
@@ -40,6 +45,7 @@ export function Shell() {
   );
   const [candidateDecisions, setCandidateDecisions] = useState<DecisionMap>({});
   const [scoreOverrides, setScoreOverrides] = useState<ScoreMap>({});
+  const [fitGate, setFitGate] = useState<FitGateMap>({});
   const [auditEntries, setAuditEntries] = useState<AuditEntry[]>([]);
   const [helpOpen, setHelpOpen] = useState(false);
 
@@ -47,6 +53,7 @@ export function Shell() {
   useEffect(() => {
     setCandidateDecisions(loadDecisions());
     setScoreOverrides(loadScores());
+    setFitGate(loadFitGate());
     setAuditEntries(loadAuditLog());
   }, []);
 
@@ -118,6 +125,32 @@ export function Shell() {
         previousScore,
         newScore: next.score,
         model: next.model,
+      });
+      if (entry) setAuditEntries((prev) => [entry, ...prev]);
+    },
+    [activeRoleId],
+  );
+
+  const onFitGate = useCallback(
+    (
+      candidateId: string,
+      result: { decision: FitGateResult["decision"]; reasoning: string; model: string },
+    ) => {
+      setFitGate((prev) => {
+        const next: FitGateMap = {
+          ...prev,
+          [candidateId]: { ...result, ts: Date.now() },
+        };
+        saveFitGate(next);
+        return next;
+      });
+
+      const entry = appendFitGateEntry({
+        candidateId,
+        roleId: activeRoleId,
+        decision: result.decision,
+        reasoning: result.reasoning,
+        model: result.model,
       });
       if (entry) setAuditEntries((prev) => [entry, ...prev]);
     },
@@ -213,8 +246,10 @@ export function Shell() {
               onSelect={setSelectedCandidateId}
               onDecision={onDecision}
               onRescore={onRescore}
+              onFitGate={onFitGate}
               auditEntries={auditEntries}
               scoreOverrides={scoreOverrides}
+              fitGate={fitGate}
             />
           )}
           {activeTab === "criteria" && <CriteriaView roleId={activeRoleId} />}

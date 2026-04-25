@@ -2,6 +2,39 @@
 
 import type { Candidate, Criterion, ScoreCell } from "@/lib/mock-data";
 
+export type FitGateDecision = {
+  decision: "advance" | "hold" | "reject";
+  reasoning: string;
+  model: string;
+  pipelineVersion: string;
+  pipelineHash: string;
+};
+
+export async function decideCandidate(
+  candidate: Pick<Candidate, "name" | "headline" | "resumeSummary">,
+  criteria: {
+    name: string;
+    type: string;
+    strictness: number;
+    score: number;
+    evidence: string[];
+  }[],
+  model: "gemini-2.5-flash" | "gemini-2.5-pro" = "gemini-2.5-flash",
+): Promise<FitGateDecision> {
+  const resp = await fetch("/api/decide", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ candidate, criteria, model }),
+  });
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => "");
+    throw new Error(
+      `Decide error ${resp.status}: ${text.slice(0, 200) || "no body"}`,
+    );
+  }
+  return (await resp.json()) as FitGateDecision;
+}
+
 export type ScoreResult = ScoreCell & {
   reasoning: string;
   model: string;

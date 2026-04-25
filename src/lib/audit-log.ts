@@ -5,6 +5,7 @@ import type { Candidate } from "@/lib/mock-data";
 const STORAGE_DECISIONS = "axon.decisions.v1";
 const STORAGE_LOG = "axon.audit.v2";
 const STORAGE_SCORES = "axon.scores.v1";
+const STORAGE_FITGATE = "axon.fitgate.v1";
 
 export type DecisionMap = Record<string, Candidate["status"]>;
 
@@ -42,7 +43,22 @@ export type RescoreEntry = BaseEntry & {
   model: string;
 };
 
-export type AuditEntry = DecisionEntry | RescoreEntry;
+export type FitGateEntry = BaseEntry & {
+  kind: "fitgate";
+  decision: Exclude<Candidate["status"], "scoring">;
+  reasoning: string;
+  model: string;
+};
+
+export type AuditEntry = DecisionEntry | RescoreEntry | FitGateEntry;
+
+export type FitGateResult = {
+  decision: Exclude<Candidate["status"], "scoring">;
+  reasoning: string;
+  model: string;
+  ts: number;
+};
+export type FitGateMap = Record<string, FitGateResult>;
 
 const DEFAULT_PIPELINE_VERSION = "v12";
 const DEFAULT_PIPELINE_HASH = "3a7f9c2";
@@ -92,6 +108,27 @@ export function saveScores(map: ScoreMap) {
 
 export function scoreKey(candidateId: string, criterionId: string): string {
   return `${candidateId}:${criterionId}`;
+}
+
+/* Fit gate */
+
+export function loadFitGate(): FitGateMap {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = window.localStorage.getItem(STORAGE_FITGATE);
+    return raw ? (JSON.parse(raw) as FitGateMap) : {};
+  } catch {
+    return {};
+  }
+}
+
+export function saveFitGate(map: FitGateMap) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(STORAGE_FITGATE, JSON.stringify(map));
+  } catch {
+    /* ignore */
+  }
 }
 
 /* Audit log */
@@ -151,6 +188,28 @@ export function appendRescoreEntry(
     pipelineVersion: DEFAULT_PIPELINE_VERSION,
     pipelineHash: DEFAULT_PIPELINE_HASH,
     reviewer: DEFAULT_REVIEWER,
+    ...entry,
+  };
+  const current = loadAuditLog();
+  current.unshift(full);
+  persist(current.slice(0, 500));
+  return full;
+}
+
+export function appendFitGateEntry(
+  entry: Omit<
+    FitGateEntry,
+    "id" | "ts" | "kind" | "pipelineVersion" | "pipelineHash" | "reviewer"
+  >,
+): FitGateEntry | null {
+  if (typeof window === "undefined") return null;
+  const full: FitGateEntry = {
+    id: cryptoId(),
+    ts: Date.now(),
+    kind: "fitgate",
+    pipelineVersion: DEFAULT_PIPELINE_VERSION,
+    pipelineHash: DEFAULT_PIPELINE_HASH,
+    reviewer: "pipeline",
     ...entry,
   };
   const current = loadAuditLog();

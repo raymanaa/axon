@@ -14,12 +14,14 @@ import {
 import { useCallback, useMemo, useState } from "react";
 import { ScoreBar, ScoreNumber } from "@/components/score-bar";
 import { StatusPill } from "@/components/status-pill";
-import { scoreCandidateStream } from "@/lib/api";
+import { decideCandidate, scoreCandidateStream } from "@/lib/api";
 import {
   auditEntriesForCandidate,
   formatRelative,
   scoreKey,
   type AuditEntry,
+  type FitGateMap,
+  type FitGateResult,
   type ScoreMap,
 } from "@/lib/audit-log";
 import {
@@ -47,8 +49,17 @@ type Props = {
       model: string;
     },
   ) => void;
+  onFitGate: (
+    candidateId: string,
+    result: {
+      decision: FitGateResult["decision"];
+      reasoning: string;
+      model: string;
+    },
+  ) => void;
   auditEntries: AuditEntry[];
   scoreOverrides: ScoreMap;
+  fitGate: FitGateMap;
 };
 
 export function CandidatesView({
@@ -57,8 +68,10 @@ export function CandidatesView({
   onSelect,
   onDecision,
   onRescore,
+  onFitGate,
   auditEntries,
   scoreOverrides,
+  fitGate,
 }: Props) {
   const baseCandidates = CANDIDATES[roleId] ?? [];
   const criteria = CRITERIA[roleId] ?? [];
@@ -123,9 +136,11 @@ export function CandidatesView({
             candidate={selected}
             criteria={criteria}
             entries={selectedEntries}
+            fitGate={fitGate[selected.id] ?? null}
             onClose={() => onSelect(null)}
             onDecision={onDecision}
             onRescore={onRescore}
+            onFitGate={onFitGate}
           />
         )}
       </AnimatePresence>
@@ -255,21 +270,26 @@ function DetailPanel({
   candidate,
   criteria,
   entries,
+  fitGate,
   onClose,
   onDecision,
   onRescore,
+  onFitGate,
 }: {
   candidate: Candidate;
   criteria: Criterion[];
   entries: AuditEntry[];
+  fitGate: FitGateResult | null;
   onClose: () => void;
   onDecision: (id: string, d: Candidate["status"]) => void;
   onRescore: Props["onRescore"];
+  onFitGate: Props["onFitGate"];
 }) {
   const [rescoring, setRescoring] = useState<Record<string, boolean>>({});
   const [rescoreErr, setRescoreErr] = useState<string | null>(null);
   const [reasoning, setReasoning] = useState<Record<string, string>>({});
   const [partial, setPartial] = useState<Record<string, string>>({});
+  const [fitGateLoading, setFitGateLoading] = useState(false);
 
   const runRescore = useCallback(
     async (crit: Criterion) => {
@@ -329,7 +349,52 @@ function DetailPanel({
     for (const crit of criteria) {
       await runRescore(crit);
     }
-  }, [criteria, runRescore]);
+    // Auto-run Fit gate with the latest scores after the last rescore.
+    // Read scores from component-scope candidate (reflects the latest render).
+    setFitGateLoading(true);
+    try {
+      const payload = criteria
+        .map((crit) => {
+          const cell = candidate.scores[crit.id];
+          if (!cell) return null;
+          return {
+            name: crit.name,
+            type: crit.type,
+            strictness: crit.strictness,
+            score: cell.score,
+            evidence: cell.evidence,
+          };
+        })
+        .filter(Boolean) as {
+        name: string;
+        type: string;
+        strictness: number;
+        score: number;
+        evidence: string[];
+      }[];
+
+      if (payload.length > 0) {
+        const result = await decideCandidate(
+          {
+            name: candidate.name,
+            headline: candidate.headline,
+            resumeSummary: candidate.resumeSummary,
+          },
+          payload,
+          "gemini-2.5-flash",
+        );
+        onFitGate(candidate.id, {
+          decision: result.decision,
+          reasoning: result.reasoning,
+          model: result.model,
+        });
+      }
+    } catch (e) {
+      setRescoreErr(e instanceof Error ? e.message : "Fit gate error");
+    } finally {
+      setFitGateLoading(false);
+    }
+  }, [criteria, runRescore, candidate, onFitGate]);
 
   const anyScoring = Object.values(rescoring).some(Boolean);
 
@@ -425,16 +490,52 @@ function DetailPanel({
         </section>
 
         <section className="px-6 py-4 border-t border-line">
-          <div className="mb-2 text-[10.5px] font-mono uppercase tracking-[0.16em] text-ink-3">
-            Pipeline decision
+          <div className="mb-2 flex items-center justify-between">
+            <div className="text-[10.5px] font-mono uppercase tracking-[0.16em] text-ink-3">
+              Pipeline decision
+            </div>
+            {fitGateLoading && (
+              <span className="flex items-center gap-1.5 text-[10.5px] text-ink-3 font-mono">
+                <Loader2 className="h-3 w-3 animate-spin" strokeWidth={2} />
+                <span>Fit gate running…</span>
+              </span>
+            )}
           </div>
-          <div className="flex items-center gap-2 mb-3">
-            <StatusPill status={candidate.status} size="md" />
-            <span className="text-[11px] text-ink-3">
-              based on weighted scores
-            </span>
+
+          {fitGate && !fitGateLoading && (
+            <motion.div
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mb-3 rounded-lg border border-line bg-card px-3.5 py-3"
+            >
+              <div className="flex items-center gap-2">
+                <StatusPill status={fitGate.decision} size="md" />
+                <span className="text-[10.5px] font-mono text-ink-3 uppercase tracking-[0.14em]">
+                  · by pipeline
+                </span>
+              </div>
+              <p className="mt-2 text-[12.5px] leading-[1.6] text-ink-2">
+                {fitGate.reasoning}
+              </p>
+              <div className="mt-2 font-mono text-[10px] text-ink-3 uppercase tracking-[0.14em]">
+                {fitGate.model} · {formatRelative(fitGate.ts)}
+              </div>
+            </motion.div>
+          )}
+
+          {!fitGate && !fitGateLoading && (
+            <div className="mb-3 flex items-center gap-2">
+              <StatusPill status={candidate.status} size="md" />
+              <span className="text-[11px] text-ink-3">
+                seed recommendation — re-score to run the Fit gate
+              </span>
+            </div>
+          )}
+
+          <div className="mt-4 text-[10.5px] font-mono uppercase tracking-[0.16em] text-ink-3 mb-2">
+            Your override
           </div>
-          <div className="mt-3 flex items-center gap-2">
+          <div className="flex items-center gap-2">
             <DecisionButton
               kind="advance"
               active={candidate.status === "advance"}
@@ -675,6 +776,32 @@ function AuditRow({
   entry: AuditEntry;
   criteria: Criterion[];
 }) {
+  if (entry.kind === "fitgate") {
+    return (
+      <li className="rounded-md border border-line bg-card px-3 py-2.5">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-[12px]">
+            <ShieldCheck className="h-3 w-3 text-ink-3" strokeWidth={1.75} />
+            <span className="text-ink font-medium">Fit gate</span>
+            <span aria-hidden className="text-ink-3">
+              →
+            </span>
+            <StatusPill status={entry.decision} size="sm" />
+          </div>
+          <span className="font-mono text-[10.5px] text-ink-3">
+            {formatRelative(entry.ts)}
+          </span>
+        </div>
+        <div className="mt-1.5 flex items-center justify-between font-mono text-[10.5px] text-ink-3">
+          <span>fitgate · {entry.model}</span>
+          <span>
+            pipeline {entry.pipelineVersion} ·{" "}
+            <span className="text-ink-2">{entry.pipelineHash}</span>
+          </span>
+        </div>
+      </li>
+    );
+  }
   if (entry.kind === "decision") {
     return (
       <li className="rounded-md border border-line bg-card px-3 py-2.5">

@@ -32,6 +32,10 @@ async function handleApi(
     return handleScoreStream(request, env);
   }
 
+  if (url.pathname === "/api/decide" && request.method === "POST") {
+    return handleDecide(request, env);
+  }
+
   if (url.pathname === "/api/health" && request.method === "GET") {
     return json({ ok: true, ts: Date.now() });
   }
@@ -377,6 +381,141 @@ Return JSON with:
 - reasoning: 1-2 sentences explaining the score, referencing the evidence. No demographic commentary.
 
 If the résumé contains insufficient signal for a criterion, score lower rather than guessing — but still provide the most relevant quote you can find as evidence. Respond only with the JSON object.`;
+}
+
+type DecideRequest = {
+  candidate: { name: string; headline: string; resumeSummary: string };
+  criteria: {
+    name: string;
+    type: string;
+    strictness: number;
+    score: number;
+    evidence: string[];
+  }[];
+  model?: "gemini-2.5-flash" | "gemini-2.5-pro";
+};
+
+type DecideResponse = {
+  decision: "advance" | "hold" | "reject";
+  reasoning: string;
+  model: string;
+  pipelineVersion: string;
+  pipelineHash: string;
+};
+
+async function handleDecide(request: Request, env: Env): Promise<Response> {
+  let body: DecideRequest;
+  try {
+    body = (await request.json()) as DecideRequest;
+  } catch {
+    return json({ error: "invalid_json" }, { status: 400 });
+  }
+
+  if (!body?.candidate?.name || !Array.isArray(body.criteria) || body.criteria.length === 0) {
+    return json({ error: "missing_fields" }, { status: 400 });
+  }
+
+  const model = body.model ?? "gemini-2.5-flash";
+  const prompt = buildDecidePrompt(body);
+
+  const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${env.GEMINI_API_KEY}`;
+
+  try {
+    const resp = await fetch(geminiUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature: 0.05,
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: "object",
+            properties: {
+              decision: {
+                type: "string",
+                enum: ["advance", "hold", "reject"],
+              },
+              reasoning: { type: "string" },
+            },
+            required: ["decision", "reasoning"],
+          },
+        },
+      }),
+    });
+
+    if (!resp.ok) {
+      const text = await resp.text();
+      return json(
+        { error: "gemini_error", status: resp.status, detail: text.slice(0, 400) },
+        { status: 502 },
+      );
+    }
+
+    const data = (await resp.json()) as {
+      candidates?: { content?: { parts?: { text?: string }[] } }[];
+    };
+    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+    if (!text) return json({ error: "empty_response" }, { status: 502 });
+
+    let parsed: { decision: string; reasoning: string };
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      return json({ error: "invalid_json_output", raw: text.slice(0, 400) }, { status: 502 });
+    }
+
+    const decision = (["advance", "hold", "reject"].includes(parsed.decision)
+      ? parsed.decision
+      : "hold") as DecideResponse["decision"];
+
+    const result: DecideResponse = {
+      decision,
+      reasoning: String(parsed.reasoning ?? ""),
+      model,
+      pipelineVersion: "v12",
+      pipelineHash: "3a7f9c2",
+    };
+
+    return json(result, { headers: { "Cache-Control": "no-store" } });
+  } catch (err) {
+    return json(
+      { error: "fetch_failed", detail: err instanceof Error ? err.message : String(err) },
+      { status: 502 },
+    );
+  }
+}
+
+function buildDecidePrompt(req: DecideRequest): string {
+  const lines: string[] = [];
+  lines.push(
+    "You are the Fit-gate node in an auditable résumé screening pipeline. You decide whether a candidate should advance, be held for later review, or be rejected, based solely on the scored criteria provided below.",
+  );
+  lines.push("");
+  lines.push(`CANDIDATE: ${req.candidate.name}`);
+  lines.push(`HEADLINE: ${req.candidate.headline}`);
+  lines.push("");
+  lines.push("SCORED CRITERIA");
+  for (const c of req.criteria) {
+    lines.push(`• ${c.name} (${c.type}) — score ${c.score.toFixed(1)}/5, strictness ${c.strictness}/5`);
+    for (const ev of c.evidence.slice(0, 2)) lines.push(`    evidence: "${ev}"`);
+  }
+  lines.push("");
+  lines.push("DECISION RULES");
+  lines.push(
+    "- advance: candidate clearly meets the bar for a first interview. At least one criterion must be 4.0+ and no criterion below 2.5 (unless strictness on that criterion is low).",
+  );
+  lines.push(
+    "- hold: mixed signal — worth a second human review but not an automatic advance. Use when the candidate is borderline or strong-in-some-dims, weak-in-others.",
+  );
+  lines.push(
+    "- reject: does not meet the bar for this role. Use when multiple criteria are below 2.5 or the strongest criterion is below 3.0 on a strict role.",
+  );
+  lines.push("");
+  lines.push(
+    "Return JSON with {decision, reasoning}. Reasoning must cite specific criteria and scores (e.g., 'Backend experience 4.2 meets the bar, but Communication 2.1 under strict setting is disqualifying for this senior role'). 2-3 sentences max. Do not mention demographic signals.",
+  );
+  return lines.join("\n");
 }
 
 function json(obj: unknown, init: ResponseInit = {}): Response {
