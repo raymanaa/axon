@@ -12,12 +12,17 @@ import { RoleTabs, type RoleTab } from "@/components/role-tabs";
 import { RolesNav } from "@/components/roles-nav";
 import { HelpPopover } from "@/components/top-bar";
 import {
-  appendAuditEntry,
+  appendDecisionEntry,
+  appendRescoreEntry,
   loadAuditLog,
   loadDecisions,
+  loadScores,
   saveDecisions,
+  saveScores,
+  scoreKey,
   type AuditEntry,
   type DecisionMap,
+  type ScoreMap,
 } from "@/lib/audit-log";
 import {
   CANDIDATES,
@@ -34,12 +39,14 @@ export function Shell() {
     null,
   );
   const [candidateDecisions, setCandidateDecisions] = useState<DecisionMap>({});
+  const [scoreOverrides, setScoreOverrides] = useState<ScoreMap>({});
   const [auditEntries, setAuditEntries] = useState<AuditEntry[]>([]);
   const [helpOpen, setHelpOpen] = useState(false);
 
   // Hydrate from localStorage after mount (SSR-safe)
   useEffect(() => {
     setCandidateDecisions(loadDecisions());
+    setScoreOverrides(loadScores());
     setAuditEntries(loadAuditLog());
   }, []);
 
@@ -70,7 +77,7 @@ export function Shell() {
         return nextMap;
       });
 
-      const entry = appendAuditEntry({
+      const entry = appendDecisionEntry({
         candidateId: id,
         roleId: activeRoleId,
         from: previous,
@@ -79,6 +86,42 @@ export function Shell() {
       if (entry) setAuditEntries((prev) => [entry, ...prev]);
     },
     [activeRoleId, candidateDecisions],
+  );
+
+  const onRescore = useCallback(
+    (
+      candidateId: string,
+      criterionId: string,
+      previousScore: number,
+      next: { score: number; evidence: string[]; reasoning: string; model: string },
+    ) => {
+      const key = scoreKey(candidateId, criterionId);
+      setScoreOverrides((prev) => {
+        const nextMap: ScoreMap = {
+          ...prev,
+          [key]: {
+            score: next.score,
+            evidence: next.evidence,
+            reasoning: next.reasoning,
+            model: next.model,
+            ts: Date.now(),
+          },
+        };
+        saveScores(nextMap);
+        return nextMap;
+      });
+
+      const entry = appendRescoreEntry({
+        candidateId,
+        roleId: activeRoleId,
+        criterionId,
+        previousScore,
+        newScore: next.score,
+        model: next.model,
+      });
+      if (entry) setAuditEntries((prev) => [entry, ...prev]);
+    },
+    [activeRoleId],
   );
 
   function selectRole(id: RoleId) {
@@ -169,7 +212,9 @@ export function Shell() {
               selectedId={selectedCandidateId}
               onSelect={setSelectedCandidateId}
               onDecision={onDecision}
+              onRescore={onRescore}
               auditEntries={auditEntries}
+              scoreOverrides={scoreOverrides}
             />
           )}
           {activeTab === "criteria" && <CriteriaView roleId={activeRoleId} />}

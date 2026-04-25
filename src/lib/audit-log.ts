@@ -3,27 +3,52 @@
 import type { Candidate } from "@/lib/mock-data";
 
 const STORAGE_DECISIONS = "axon.decisions.v1";
-const STORAGE_LOG = "axon.audit.v1";
+const STORAGE_LOG = "axon.audit.v2";
+const STORAGE_SCORES = "axon.scores.v1";
 
 export type DecisionMap = Record<string, Candidate["status"]>;
 
-export type AuditEntry = {
+export type ScoreOverride = {
+  score: number;
+  evidence: string[];
+  reasoning?: string;
+  model?: string;
+  ts: number;
+};
+/** keyed by `${candidateId}:${criterionId}` */
+export type ScoreMap = Record<string, ScoreOverride>;
+
+type BaseEntry = {
   id: string;
   ts: number;
   candidateId: string;
   roleId: string;
-  from: Candidate["status"];
-  to: Candidate["status"];
   reviewer: string;
   pipelineVersion: string;
   pipelineHash: string;
 };
 
+export type DecisionEntry = BaseEntry & {
+  kind: "decision";
+  from: Candidate["status"];
+  to: Candidate["status"];
+};
+
+export type RescoreEntry = BaseEntry & {
+  kind: "rescore";
+  criterionId: string;
+  previousScore: number;
+  newScore: number;
+  model: string;
+};
+
+export type AuditEntry = DecisionEntry | RescoreEntry;
+
 const DEFAULT_PIPELINE_VERSION = "v12";
 const DEFAULT_PIPELINE_HASH = "3a7f9c2";
 const DEFAULT_REVIEWER = "you";
 
-/* Decisions persistence */
+/* Decisions */
 
 export function loadDecisions(): DecisionMap {
   if (typeof window === "undefined") return {};
@@ -40,8 +65,33 @@ export function saveDecisions(map: DecisionMap) {
   try {
     window.localStorage.setItem(STORAGE_DECISIONS, JSON.stringify(map));
   } catch {
-    /* quota, private mode */
+    /* ignore quota */
   }
+}
+
+/* Scores */
+
+export function loadScores(): ScoreMap {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = window.localStorage.getItem(STORAGE_SCORES);
+    return raw ? (JSON.parse(raw) as ScoreMap) : {};
+  } catch {
+    return {};
+  }
+}
+
+export function saveScores(map: ScoreMap) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(STORAGE_SCORES, JSON.stringify(map));
+  } catch {
+    /* ignore quota */
+  }
+}
+
+export function scoreKey(candidateId: string, criterionId: string): string {
+  return `${candidateId}:${criterionId}`;
 }
 
 /* Audit log */
@@ -56,11 +106,26 @@ export function loadAuditLog(): AuditEntry[] {
   }
 }
 
-export function appendAuditEntry(entry: Omit<AuditEntry, "id" | "ts" | "pipelineVersion" | "pipelineHash" | "reviewer">) {
+function persist(entries: AuditEntry[]) {
   if (typeof window === "undefined") return;
-  const full: AuditEntry = {
+  try {
+    window.localStorage.setItem(STORAGE_LOG, JSON.stringify(entries));
+  } catch {
+    /* ignore */
+  }
+}
+
+export function appendDecisionEntry(
+  entry: Omit<
+    DecisionEntry,
+    "id" | "ts" | "kind" | "pipelineVersion" | "pipelineHash" | "reviewer"
+  >,
+): DecisionEntry | null {
+  if (typeof window === "undefined") return null;
+  const full: DecisionEntry = {
     id: cryptoId(),
     ts: Date.now(),
+    kind: "decision",
     pipelineVersion: DEFAULT_PIPELINE_VERSION,
     pipelineHash: DEFAULT_PIPELINE_HASH,
     reviewer: DEFAULT_REVIEWER,
@@ -68,13 +133,29 @@ export function appendAuditEntry(entry: Omit<AuditEntry, "id" | "ts" | "pipeline
   };
   const current = loadAuditLog();
   current.unshift(full);
-  // Keep bounded to last 500 entries
-  const bounded = current.slice(0, 500);
-  try {
-    window.localStorage.setItem(STORAGE_LOG, JSON.stringify(bounded));
-  } catch {
-    /* ignore */
-  }
+  persist(current.slice(0, 500));
+  return full;
+}
+
+export function appendRescoreEntry(
+  entry: Omit<
+    RescoreEntry,
+    "id" | "ts" | "kind" | "pipelineVersion" | "pipelineHash" | "reviewer"
+  >,
+): RescoreEntry | null {
+  if (typeof window === "undefined") return null;
+  const full: RescoreEntry = {
+    id: cryptoId(),
+    ts: Date.now(),
+    kind: "rescore",
+    pipelineVersion: DEFAULT_PIPELINE_VERSION,
+    pipelineHash: DEFAULT_PIPELINE_HASH,
+    reviewer: DEFAULT_REVIEWER,
+    ...entry,
+  };
+  const current = loadAuditLog();
+  current.unshift(full);
+  persist(current.slice(0, 500));
   return full;
 }
 
