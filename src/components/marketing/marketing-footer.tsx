@@ -57,7 +57,6 @@ export function MarketingFooter() {
           </div>
           <ul className="mt-3 space-y-2 text-[13px] text-ink-2">
             <li>Built by Rayen Manaa</li>
-            <li>Portfolio project #1</li>
             <li>
               <a
                 href="https://github.com/raymanaa/axon"
